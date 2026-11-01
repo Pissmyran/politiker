@@ -15,10 +15,10 @@
     "@types/node": "^26.6.6",
     "c8": "^12.0.0",
     "typescript": "^7.0.2",
-    "wrangler": "^4.155.0"
+    "wrangler": "^4.156.0"
   },
   "dependencies": {
     "mammoth": "^1.13.0",
-    "unpdf": "^2.0.0"
+    "unpdf": "^2.0.1"
   }
 }
