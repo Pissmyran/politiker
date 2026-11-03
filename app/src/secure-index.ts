@@ -261,6 +261,26 @@ async function secureFetch(req: Request, env: Env, ctx: ExecutionContext): Promi
         json({ error: "För många anrop — försök igen senare" }, 429),
         url.pathname,
       );
+    if (url.pathname === "/api/feedback" && req.body) {
+      const reader = req.body.getReader();
+      const bytes = new Uint8Array(maxBytes);
+      let length = 0;
+      try {
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          if (value.byteLength > maxBytes - length) {
+            void reader.cancel().catch(() => {});
+            return withSecurityHeaders(json({ error: "För stor begäran" }, 413), url.pathname);
+          }
+          bytes.set(value, length);
+          length += value.byteLength;
+        }
+      } catch {
+        return withSecurityHeaders(json({ error: "Ogiltig begäran" }, 400), url.pathname);
+      }
+      req = new Request(req, { body: bytes.subarray(0, length) });
+    }
   }
   if (req.method === "POST" && url.pathname === "/api/send") {
     const contentLength = Number(req.headers.get("Content-Length") ?? 0);

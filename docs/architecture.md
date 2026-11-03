@@ -65,6 +65,14 @@ Kön och DLQ visar bara transportens tillstånd. Utskickets verkliga status finn
 - Admin → uttrycklig behörighetskontroll.
 - Känsliga API-svar cacheas aldrig.
 
+<!-- coderabbit-ai-generated:v1 -->
+
+<!-- coderabbit-ai-generated-section:v1:261fdbb5c936d12f6ec10e2e50fd804d11dd1f60080e36de4ec2b62fde6a0c1a -->
+
+- Feedback begränsas till 64 KiB per begäran och 12 000 tecken kompakt JSON för klientkontexten som skickas i mejlet.
+
+<!-- /coderabbit-ai-generated:v1 -->
+
 ## Tema och PWA
 
 Det finns tre teman: `legacy` (standard), `forest` (med etiketten från `SITE_FAMILY`) och `blackout`. Valet sparas i `localStorage["<prefix>.theme"]` och cookien `<prefix>_theme`. Temaväljaren ligger längst ner på de publika sidorna. Temat ändrar bara utseendet; PolitikerKontakts egen gul-blå profil och statusfärger finns i alla teman.
