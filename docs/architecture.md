@@ -28,7 +28,13 @@ Loggning: alla loggar (sampling 1, med anropsloggar), spårningar till 1 %, frå
 
 ## Konton och sessioner
 
-Konton och allt som hör till dem ligger i D1, sessionerna i KV. Inloggning sker med lösenord (med valfri TOTP) eller med Google eller Microsoft. Känsliga åtgärder, som att ändra ett sparat e-postkonto, kräver att inloggningen är högst 15 minuter gammal; annars ber sidan dig bekräfta igen.
+<!-- coderabbit-ai-generated:v1 -->
+
+<!-- coderabbit-ai-generated-section:v1:b20015d1bfb5b6428b58582c0b18a5d7029b1277512953a1cef738e4e994f229 -->
+
+Konton och allt som hör till dem ligger i D1, sessionerna i KV. Inloggning sker med lösenord (med valfri TOTP) eller med Google eller Microsoft. OAuth-inloggning binds till webbläsaren och den valda leverantören med en tillfällig cookie som gäller i tio minuter. Inloggningar som påbörjades före en uppdatering av skyddet behöver startas om. Känsliga åtgärder, som att ändra ett sparat e-postkonto, kräver att inloggningen är högst 15 minuter gammal; annars ber sidan dig bekräfta igen.
+
+<!-- /coderabbit-ai-generated:v1 -->
 
 ## Det offentliga registret
 

@@ -99,6 +99,9 @@ function getCookie(req: Request, name: string): string | null {
 function setSessionCookie(token: string): string {
   return `session=${token}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=${60 * 60 * 24 * 30}`;
 }
+function oauthBindingCookie(state: string, value: string, maxAge: number): string {
+  return `__Host-oauth-${state}=${value}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=${maxAge}`;
+}
 function requestedRetentionMs(req: Request): number {
   const raw =
     req.headers.get("X-Letter-Retention-Ms") ?? getCookie(req, "letter_retention_ms") ?? "300000";
@@ -665,19 +668,27 @@ async function handleRequest(req: Request, env: Env, url: URL): Promise<Response
   const oauthMatch = url.pathname.match(/^\/api\/oauth\/([a-z]+)\/(start|callback)$/);
   if (oauthMatch) {
     const [, provider, step] = oauthMatch;
+    let clearBinding: string | null = null;
     try {
       if (step === "start") {
-        const state = randomId();
-        await env.SESSIONS.put(`oauthstate:${state}`, "1", { expirationTtl: 600 });
-        return Response.redirect(getAuthorizeUrl(provider, env, state), 302);
+        const state = randomId(),
+          binding = randomId() + randomId(),
+          location = getAuthorizeUrl(provider, env, state);
+        await env.SESSIONS.put(`oauthstate:${state}`, `login:${provider}:${binding}`, {
+          expirationTtl: 600,
+        });
+        return new Response(null, {
+          status: 302,
+          headers: { Location: location, "Set-Cookie": oauthBindingCookie(state, binding, 600) },
+        });
       }
       const code = url.searchParams.get("code"),
         state = url.searchParams.get("state");
       if (!code || !state) return json({ error: "Saknar code/state" }, 400);
       const storedState = await env.SESSIONS.get(`oauthstate:${state}`);
       if (!storedState) return json({ error: "Ogiltig eller utgången state — försök igen" }, 400);
-      await env.SESSIONS.delete(`oauthstate:${state}`);
       if (storedState.startsWith("link:")) {
+        await env.SESSIONS.delete(`oauthstate:${state}`);
         const linkAccountId = storedState.slice(5),
           sessionToken = getCookie(req, "session"),
           account = await getAccountFromSession(env, sessionToken);
@@ -686,15 +697,32 @@ async function handleRequest(req: Request, env: Env, url: URL): Promise<Response
         await handleOAuthLinkCallback(provider, env, code, linkAccountId);
         return Response.redirect("https://__PUBLIC_HOST__/", 302);
       }
+      const cookieName = `__Host-oauth-${state}`;
+      const binding = (req.headers.get("Cookie") ?? "")
+        .split(";")
+        .map((cookie) => cookie.trim())
+        .find((cookie) => cookie.startsWith(`${cookieName}=`))
+        ?.slice(cookieName.length + 1);
+      if (
+        !/^[A-Za-z0-9]{1,22}$/.test(state) ||
+        !binding ||
+        storedState !== `login:${provider}:${binding}`
+      )
+        return json({ error: "State tillhör en annan session — försök igen" }, 400);
+      clearBinding = oauthBindingCookie(state, "", 0);
+      await env.SESSIONS.delete(`oauthstate:${state}`);
       const { accountId } = await handleOAuthCallback(provider, env, code),
         sessionToken = randomId() + randomId();
       await env.SESSIONS.put(`session:${sessionToken}`, accountId, { expirationTtl: 2592000 });
       const resp = Response.redirect("https://__PUBLIC_HOST__/", 302),
         headers = new Headers(resp.headers);
       headers.set("Set-Cookie", setSessionCookie(sessionToken));
+      headers.append("Set-Cookie", clearBinding);
       return new Response(null, { status: 302, headers });
     } catch (err) {
-      return json({ error: err instanceof Error ? err.message : "OAuth-fel" }, 400);
+      const response = json({ error: err instanceof Error ? err.message : "OAuth-fel" }, 400);
+      if (clearBinding) response.headers.append("Set-Cookie", clearBinding);
+      return response;
     }
   }
 
