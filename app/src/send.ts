@@ -10,6 +10,7 @@ import type { SendJobMessage } from "../../shared/types";
 import { decryptLetterData, encryptLetterData } from "./letter-privacy";
 import { visibleSendJobError } from "../../shared/smtp-failure";
 import { normalizeSelectedLetterIntroText } from "./letter-intro-presets";
+import { claimDailySendBudget, hasDailySendBudget } from "./send-daily-budget";
 
 const STAGE_CHUNK_SIZE = 500;
 const MAX_LETTER_HTML_BYTES = 1024 * 1024;
@@ -164,42 +165,8 @@ export async function maySendQueuedRecipient(
   recipientEmail: string,
   queuedAt: number,
 ): Promise<boolean> {
-  const job = await env.DB.prepare(
-    "SELECT daily_limit, next_daily_limit, limit_switch_at, status FROM send_jobs WHERE id = ?",
-  )
-    .bind(sendJobId)
-    .first<{
-      daily_limit: number | null;
-      next_daily_limit: number | null;
-      limit_switch_at: number | null;
-      status: string;
-    }>();
-  if (!job || !["pending", "sending"].includes(job.status)) return false;
-
-  const dailyLimit = effectiveJobDailyLimit(job);
-  if (dailyLimit == null) return true;
-
-  const startOfDay = new Date();
-  startOfDay.setUTCHours(0, 0, 0, 0);
-  const sent = await env.DB.prepare(
-    "SELECT COUNT(*) AS n FROM send_log WHERE send_job_id = ? AND sent_at >= ? AND status = 'ok'",
-  )
-    .bind(sendJobId, startOfDay.getTime())
-    .first<{ n: number }>();
-  const available = Math.max(0, dailyLimit - (sent?.n ?? 0));
-  const allowed =
-    available > 0
-      ? await env.DB.prepare(
-          `SELECT 1 AS allowed FROM (
-         SELECT recipient_email FROM send_job_recipients
-         WHERE send_job_id = ? AND status = 'queued'
-         ORDER BY queued_at, rowid LIMIT ?
-       ) WHERE recipient_email = ? COLLATE NOCASE`,
-        )
-          .bind(sendJobId, available, recipientEmail)
-          .first<{ allowed: number }>()
-      : null;
-  if (allowed) return true;
+  if (await hasDailySendBudget(env.DB, sendJobId, recipientEmail, queuedAt, Date.now()))
+    return true;
 
   await env.DB.prepare(
     `UPDATE send_job_recipients SET status = 'pending', queued_at = NULL
@@ -302,13 +269,15 @@ export async function enqueuePendingRecipientsForJob(
   let queued = 0;
   for (const recipient of results) {
     const queuedAt = Date.now();
-    const claimed = await env.DB.prepare(
-      `UPDATE send_job_recipients SET status = 'queued', queued_at = ?
-       WHERE send_job_id = ? AND recipient_email = ? AND status = 'pending'`,
-    )
-      .bind(queuedAt, sendJobId, recipient.recipient_email)
-      .run();
-    if (claimed.meta.changes !== 1) continue;
+    const claimed = await claimDailySendBudget(
+      env.DB,
+      sendJobId,
+      job.account_id,
+      job.mail_credential_id,
+      recipient.recipient_email,
+      queuedAt,
+    );
+    if (!claimed) continue;
 
     const message: SendJobMessage = {
       sendJobId,
