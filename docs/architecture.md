@@ -52,6 +52,14 @@ Inledningarna sparas krypterat på utskicket (`send_jobs.intro_text`) när det s
 
 Kön och DLQ visar bara transportens tillstånd. Utskickets verkliga status finns i D1.
 
+<!-- coderabbit-ai-generated:v1 -->
+
+<!-- coderabbit-ai-generated-section:v1:cd4aa2576e181696b659b89953f81a5f0bca426240c9314a764297608c87bbda -->
+
+Dagens lyckade utskick räknas separat från jobbhistoriken, så att raderade jobb fortfarande ingår i kontots och e-postkontots dygnsgränser. Räknaren innehåller inga mottagaradresser; utgångna poster tas bort när kontot nästa gång skickar, och alla poster tas bort när kontot raderas.
+
+<!-- /coderabbit-ai-generated:v1 -->
+
 ## Takten
 
 `CredentialRateLimiter` är en Durable Object per e-postkonto. Eftersom den hanterar ett anrop i taget kan flera samtidiga Worker-anrop aldrig tillsammans skicka fortare än leverantörens gräns. Den får aldrig ersättas av state i KV eller i processen.

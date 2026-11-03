@@ -316,10 +316,19 @@ async function logSend(
   markRecipientDead = false,
 ): Promise<void> {
   const now = Date.now();
+  const id = randomId();
+  if (status === "ok") {
+    // Record the successful send even if the job is deleted while SMTP is in flight.
+    await env.DB.prepare(
+      "INSERT INTO send_usage (id,account_id,mail_credential_id,sent_at) VALUES (?,?,?,?)",
+    )
+      .bind(id, m.accountId, m.mailCredentialId, now)
+      .run();
+  }
   await env.DB.prepare(
     "INSERT INTO send_log (id,send_job_id,account_id,recipient_email,status,error,sent_at) VALUES (?,?,?,?,?,?,?)",
   )
-    .bind(randomId(), m.sendJobId, m.accountId, m.recipientEmail, status, error, now)
+    .bind(id, m.sendJobId, m.accountId, m.recipientEmail, status, error, now)
     .run();
   await env.DB.prepare(
     "UPDATE send_job_recipients SET status=?,finished_at=?,error=? WHERE send_job_id=? AND recipient_email=?",
