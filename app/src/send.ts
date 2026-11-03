@@ -616,16 +616,22 @@ async function handleSendJobAction(
     throw new Error("Avbryt utskicket innan det tas bort");
   }
 
-  await env.DB.batch([
-    env.DB.prepare("DELETE FROM send_log WHERE send_job_id = ? AND account_id = ?").bind(
-      sendJobId,
-      accountId,
-    ),
-    env.DB.prepare("DELETE FROM send_jobs WHERE id = ? AND account_id = ?").bind(
-      sendJobId,
-      accountId,
-    ),
+  const results = await env.DB.batch([
+    env.DB.prepare(
+      `INSERT INTO letter_retention_queue (letter_id, content_delete_at)
+       SELECT letter_id, COALESCE(content_delete_at, ?) FROM send_jobs
+       WHERE id = ? AND account_id = ? AND status NOT IN ('pending', 'sending')
+       ON CONFLICT(letter_id) DO UPDATE SET content_delete_at = MIN(content_delete_at, excluded.content_delete_at)`,
+    ).bind(Date.now(), sendJobId, accountId),
+    env.DB.prepare(
+      `DELETE FROM send_log WHERE send_job_id = ? AND account_id = ?
+      AND EXISTS (SELECT 1 FROM send_jobs WHERE id = ? AND account_id = ? AND status NOT IN ('pending', 'sending'))`,
+    ).bind(sendJobId, accountId, sendJobId, accountId),
+    env.DB.prepare(
+      "DELETE FROM send_jobs WHERE id = ? AND account_id = ? AND status NOT IN ('pending', 'sending')",
+    ).bind(sendJobId, accountId),
   ]);
+  if (!results[2].meta.changes) throw new Error("Utskicket kan inte tas bort");
   return { ok: true, deleted: true };
 }
 

@@ -50,6 +50,14 @@ Each account can have its own contact lists. Reusable introductions live in `let
 
 The introductions are saved encrypted on the send (`send_jobs.intro_text`) when it starts, so a later change to a template does not affect a send in progress. The letter's content is deleted automatically after the time the user chose: 5 minutes, 1 day, 3 days or 7 days after the send is finished.
 
+<!-- coderabbit-ai-generated:v1 -->
+
+<!-- coderabbit-ai-generated-section:v1:61bed2c0abff59cf6d9148b923a25b1179824e690c8d6151708a76049ada7fab -->
+
+If the send is removed from history, the deletion deadline is retained until the letter and its attachments have been deleted. The scheduler retries if storage is unavailable.
+
+<!-- /coderabbit-ai-generated:v1 -->
+
 The queue and the DLQ only show the transport's state. The send's real status lives in D1.
 
 ## The pace
