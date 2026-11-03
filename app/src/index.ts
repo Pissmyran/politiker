@@ -65,7 +65,7 @@ import {
   providerSharesLoginCallback,
 } from "./oauth";
 import { getMicrosoftMailAuthorizeUrl } from "../../shared/graph-mail";
-import { randomId } from "../../shared/crypto";
+import { randomId, sha256Hex } from "../../shared/crypto";
 import { verifyTurnstile } from "./turnstile";
 import type { Env } from "./db";
 import { handleSendQueue } from "./send-queue";
@@ -704,7 +704,11 @@ async function handleRequest(req: Request, env: Env, url: URL): Promise<Response
     try {
       const sessionToken = getCookie(req, "session"),
         account = await getAccountFromSession(env, sessionToken);
-      if (!account) return json({ error: "Inte inloggad" }, 401);
+      if (!account || !sessionToken) return json({ error: "Inte inloggad" }, 401);
+      const sessionBinding = JSON.stringify({
+        accountId: account.id,
+        sessionHash: await sha256Hex(sessionToken),
+      });
       if (step === "start") {
         if (!env.OAUTH_MICROSOFT_CLIENT_ID)
           return json(
@@ -712,7 +716,7 @@ async function handleRequest(req: Request, env: Env, url: URL): Promise<Response
             400,
           );
         const state = randomId();
-        await env.SESSIONS.put(`oauthmailstate:${state}`, account.id as string, {
+        await env.SESSIONS.put(`oauthmailstate:${state}`, sessionBinding, {
           expirationTtl: 600,
         });
         return Response.redirect(
@@ -723,11 +727,12 @@ async function handleRequest(req: Request, env: Env, url: URL): Promise<Response
       const code = url.searchParams.get("code"),
         state = url.searchParams.get("state");
       if (!code || !state) return json({ error: "Saknar code/state" }, 400);
-      const stateAccountId = await env.SESSIONS.get(`oauthmailstate:${state}`);
-      if (!stateAccountId)
-        return json({ error: "Ogiltig eller utgången state — försök igen" }, 400);
+      const storedBinding = await env.SESSIONS.get(`oauthmailstate:${state}`);
+      if (!storedBinding) return json({ error: "Ogiltig eller utgången state — försök igen" }, 400);
+      if (storedBinding !== sessionBinding)
+        return json({ error: "State tillhör en annan session — försök igen" }, 400);
       await env.SESSIONS.delete(`oauthmailstate:${state}`);
-      await addMicrosoftGraphMailCredential(env, stateAccountId, code);
+      await addMicrosoftGraphMailCredential(env, account.id as string, code);
       return new Response(null, {
         status: 302,
         headers: { Location: "https://__PUBLIC_HOST__/" },

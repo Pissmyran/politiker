@@ -30,6 +30,14 @@ Loggning: alla loggar (sampling 1, med anropsloggar), spårningar till 1 %, frå
 
 Konton och allt som hör till dem ligger i D1, sessionerna i KV. Inloggning sker med lösenord (med valfri TOTP) eller med Google eller Microsoft. Känsliga åtgärder, som att ändra ett sparat e-postkonto, kräver att inloggningen är högst 15 minuter gammal; annars ber sidan dig bekräfta igen.
 
+<!-- coderabbit-ai-generated:v1 -->
+
+<!-- coderabbit-ai-generated-section:v1:ae471a08f3a703b208788cea38ae2da5dc201cdc631e56e187f0d9669877c340 -->
+
+En Microsoft-koppling för e-post måste slutföras i samma webbsession som startade den. Om sessionen ändras eller kopplingen avbröts vid en uppdatering, starta den på nytt.
+
+<!-- /coderabbit-ai-generated:v1 -->
+
 ## Det offentliga registret
 
 `public_contacts` är det gemensamma registret: politiker på alla nivåer, myndigheter, redaktioner, Svenska kyrkan och akademiker. `area_type` skiljer grupperna åt. Akademiker har dessutom lärosäte, enhet, titel, område och källsida. `public_contact_assignments` kopplar kommun- och regionpolitiker till nämnder och styrelser för filtrering på sakområde.
