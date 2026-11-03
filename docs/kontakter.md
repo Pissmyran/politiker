@@ -36,6 +36,8 @@ Skripten som använder D1:s HTTP-API läser variablerna ur miljön. `sanitize_d1
 | `sanitize_d1.py` | Normaliserar och rensar registret utan att hämta något nytt. `--apply` skriver ändringarna. |
 | `verify/verify_emails.py` | Kontrollerar adresserna mot mottagarnas e-postservrar utan att skicka något. |
 
+Backfill identifierar databasen med `wrangler d1 info` före läsning och skrivning. Backfill sparar återupptagningsdata i `/tmp/politiker-assignments-backfill-<uid>/replay.json` med ägarbegränsad åtkomst. En omkörning använder bara cache för samma D1-databas och kontrollerar att kontakterna fortfarande finns i rätt område. Vid ogiltig cache stoppar skriptet; kontrollera och ta bort filen om en ny skrapning behövs. Den gamla delade filen `/tmp/politiker-assignments-backfill.json` används inte.
+
 ## Kvartalskörningen
 
 `kontakter/scraper/quarterly_refresh.sh` kör alla verktygen i rätt ordning och sist `sanitize_d1.py --apply`. Den är tänkt att schemaläggas var tredje månad. Om schemaläggaren använder en fil med variablerna sätter den `POLITIKER_ENV_FILE` till den filen; skriptet stoppar om `CONTACT_SOURCES_DIR` saknas.
