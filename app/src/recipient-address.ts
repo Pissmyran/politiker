@@ -49,9 +49,23 @@ export function normalizeImportedContacts(
 export function parseIncludedRecipient(value: string): { email: string; name: string } | null {
   const raw = String(value ?? "").trim();
   if (!raw) return null;
-  const display = raw.match(/^(.*?)\s*<([^<>]+)>$/);
-  const email = cleanEmail(display ? display[2] : raw);
+  const open = raw.lastIndexOf("<");
+  let emailInput = raw;
+  let name = "";
+  if (open !== -1) {
+    const displayName = raw.slice(0, open).trimEnd();
+    const address = raw.slice(open + 1, -1);
+    if (
+      !raw.endsWith(">") ||
+      !address ||
+      address.includes(">") ||
+      /[\r\n\u2028\u2029]/.test(displayName)
+    )
+      return null;
+    emailInput = address;
+    name = cleanText(displayName.replace(/[<>]/g, " "), MAX_NAME_LENGTH);
+  }
+  const email = cleanEmail(emailInput);
   if (email.length > 254 || !EMAIL_RE.test(email)) return null;
-  const name = display ? cleanText(display[1].replace(/[<>]/g, " "), MAX_NAME_LENGTH) : "";
   return { email, name };
 }
