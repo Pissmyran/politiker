@@ -40,6 +40,7 @@ WRANGLER_CONFIG = REPO_ROOT / "app" / "wrangler.jsonc"
 D1_NAME = os.environ.get("D1_DATABASE_NAME", "politiker")
 CACHE_PATH = Path("/tmp/politiker-assignments-backfill.json")
 BATCH_PEOPLE = 200
+ASCII_LOWER = str.maketrans("ABCDEFGHIJKLMNOPQRSTUVWXYZ", "abcdefghijklmnopqrstuvwxyz")
 
 # Dessa namn beskriver inte en avgränsad huvudnämnd som är rimlig att rikta ett
 # massutskick mot. Filtreringen görs här, vid källan, så bruset aldrig lagras.
@@ -76,7 +77,19 @@ def fetch(url: str, timeout: int = 30) -> str | None:
 
 
 def clean_text(fragment: str) -> str:
-    text = html.unescape(re.sub(r"<[^>]+>", "", fragment))
+    parts: list[str] = []
+    pos = 0
+    while (start := fragment.find("<", pos)) != -1:
+        end = fragment.find(">", start + 1)
+        if end == -1:
+            break
+        if end == start + 1:
+            parts.append(fragment[pos:end + 1])
+        else:
+            parts.append(fragment[pos:start])
+        pos = end + 1
+    parts.append(fragment[pos:])
+    text = html.unescape("".join(parts))
     return re.sub(r"\s+", " ", text).strip()
 
 
@@ -121,19 +134,50 @@ def normalize_body(raw_body: str) -> str | None:
     return body
 
 
+def delimited_contents(fragment: str, opening: str, closing: str):
+    """Find non-overlapping tag contents without rescanning incomplete suffixes."""
+    folded = fragment.translate(ASCII_LOWER)
+    pos = 0
+    while (start := folded.find(opening, pos)) != -1:
+        start = folded.find(">", start + len(opening))
+        if start == -1:
+            return
+        end = folded.find(closing, start + 1)
+        if end == -1:
+            return
+        yield fragment[start + 1:end]
+        pos = end + len(closing)
+
+
 def bodies(page_html: str) -> list[str]:
-    match = re.search(r'id="engagementTable:tbody_element"(.*?)</table>', page_html, re.S | re.I)
-    if not match:
-        match = re.search(r'<table[^>]*id="engagementTable"[^>]*>(.*?)</table>', page_html, re.S | re.I)
-    if not match:
+    folded = page_html.translate(ASCII_LOWER)
+    tbody_id = 'id="engagementtable:tbody_element"'
+    start = folded.find(tbody_id)
+    end = folded.find("</table>", start + len(tbody_id)) if start != -1 else -1
+    if end != -1:
+        table = page_html[start + len(tbody_id):end]
+    else:
+        table = None
+        pos = 0
+        while (start := folded.find("<table", pos)) != -1:
+            tag_end = folded.find(">", start + len("<table"))
+            if tag_end == -1:
+                break
+            if folded.find('id="engagementtable"', start, tag_end) != -1:
+                end = folded.find("</table>", tag_end + 1)
+                if end != -1:
+                    table = page_html[tag_end + 1:end]
+                break
+            pos = tag_end + 1
+    if table is None:
         return []
     found: list[str] = []
     seen: set[str] = set()
-    for row in re.finditer(r"<tr[^>]*>(.*?)</tr>", match.group(1), re.S | re.I):
-        cells = re.findall(r"<td[^>]*>(.*?)</td>", row.group(1), re.S | re.I)
-        if not cells:
+    for row in delimited_contents(table, "<tr", "</tr>"):
+        cell = next(delimited_contents(row, "<td", "</td>"), None)
+        if cell is None:
             continue
-        body = normalize_body(clean_text(cells[0]))
+        body = normalize_body(clean_text(cell))
         if not body:
             continue
         key = body.casefold()
