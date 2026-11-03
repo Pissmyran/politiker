@@ -6,6 +6,14 @@ PolitikerKontakt låter dig skriva till politiker, myndigheter, redaktioner och 
 
 Det körs som en Cloudflare Worker med D1, KV, R2, en kö och en Durable Object, eller som en färdig Docker-image. Verktygen i `kontakter/` håller det offentliga registret uppdaterat.
 
+<!-- coderabbit-ai-generated:v1 -->
+
+<!-- coderabbit-ai-generated-section:v1:c5356f3f033cb844b73d8d939ef9002de285c8e947293a0d59187cd61d8e7d47 -->
+
+Kontoradering kräver en nyligen autentiserad session; faktorkontroller vid radering, återautentisering och TOTP-inloggning delar en försöksgräns per konto.
+
+<!-- /coderabbit-ai-generated:v1 -->
+
 ## Tester
 
 Från `app/`:
