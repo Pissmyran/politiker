@@ -288,7 +288,7 @@ export async function getRecipientsForAreas(
       ? await rawRolesForCanonicalKeys(db, includedRoleKeys)
       : [];
     if (!(includedRoleKeys.length && rawRoles.length === 0)) {
-      let sql = `SELECT name,email,area_name,area_type,role FROM public_contacts WHERE email IS NOT NULL AND TRIM(email) != '' AND (verification_status IS NULL OR verification_status NOT IN ('dead','dead_via_send'))`;
+      let sql = `SELECT name,email,area_name,area_type,role FROM public_contacts WHERE email IS NOT NULL AND TRIM(email) != '' AND (verification_status IS NULL OR verification_status != 'dead')`;
       const params: unknown[] = [];
       if (areaNames.length) {
         sql += ` AND area_name IN (SELECT value FROM json_each(?))`;
@@ -423,8 +423,7 @@ export async function getRecipientsForAreas(
           }>();
         for (const r of results) {
           const key = r.email.trim().toLocaleLowerCase("sv-SE");
-          if (r.verification_status === "dead" || r.verification_status === "dead_via_send")
-            deadEmails.add(key);
+          if (r.verification_status === "dead") deadEmails.add(key);
           else byEmail.set(key, { name: r.name, email: r.email.trim(), area_name: r.area_name });
         }
       }

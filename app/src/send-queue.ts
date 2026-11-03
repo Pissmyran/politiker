@@ -1,10 +1,6 @@
 import { decryptSecret, encryptSecret, randomId } from "../../shared/crypto";
 import { sendSmtpMail } from "../../shared/smtp";
-import {
-  isMailCredentialFailure,
-  isPermanentRecipientSmtpFailure,
-  isTransientSmtpFailure,
-} from "../../shared/smtp-failure";
+import { isMailCredentialFailure, isTransientSmtpFailure } from "../../shared/smtp-failure";
 import { sendGraphMail, refreshMicrosoftToken } from "../../shared/graph-mail";
 import type { SendJobMessage } from "../../shared/types";
 import { messagesPerMinuteFor } from "../../shared/provider-rates";
@@ -205,7 +201,7 @@ async function processJobMessages(
         continue;
       }
       bounceCount++;
-      await logSend(env, m, "bounce", errorMsg, isPermanentRecipientSmtpFailure(err));
+      await logSend(env, m, "bounce", errorMsg);
       queueMsg.ack();
       if (bounceCount >= 5 && attempted >= MIN_FOR_RATE_CHECK) {
         const rate = (bounceCount / attempted) * 100;
@@ -313,7 +309,6 @@ async function logSend(
   m: SendJobMessage,
   status: "ok" | "bounce",
   error: string | null,
-  markRecipientDead = false,
 ): Promise<void> {
   const now = Date.now();
   await env.DB.prepare(
@@ -326,18 +321,6 @@ async function logSend(
   )
     .bind(status, now, error, m.sendJobId, m.recipientEmail)
     .run();
-  if (status === "ok")
-    await env.DB.prepare(
-      "UPDATE public_contacts SET verification_status='valid_via_send',last_verified_at=? WHERE email=?",
-    )
-      .bind(now, m.recipientEmail)
-      .run();
-  else if (markRecipientDead)
-    await env.DB.prepare(
-      "UPDATE public_contacts SET verification_status='dead_via_send',last_verified_at=? WHERE email=?",
-    )
-      .bind(now, m.recipientEmail)
-      .run();
 }
 async function recordTransientSendError(env: Env, m: SendJobMessage, error: string): Promise<void> {
   await env.DB.prepare(

@@ -50,7 +50,13 @@ Each account can have its own contact lists. Reusable introductions live in `let
 
 The introductions are saved encrypted on the send (`send_jobs.intro_text`) when it starts, so a later change to a template does not affect a send in progress. The letter's content is deleted automatically after the time the user chose: 5 minutes, 1 day, 3 days or 7 days after the send is finished.
 
-The queue and the DLQ only show the transport's state. The send's real status lives in D1.
+<!-- coderabbit-ai-generated:v1 -->
+
+<!-- coderabbit-ai-generated-section:v1:064b76c00a2369d2855484a16faaf6136f26c25b8938cd142509a9eb6c8aadad -->
+
+The queue and the DLQ only show the transport's state. The send's real status lives in D1. Delivery results are saved on the send and do not change the shared contact register's verification status. The legacy `dead_via_send` status does not block recipient selection; `dead` from the register's verification is still filtered out.
+
+<!-- /coderabbit-ai-generated:v1 -->
 
 ## The pace
 
