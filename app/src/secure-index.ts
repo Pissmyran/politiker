@@ -1,4 +1,4 @@
-import baseApp from "./index";
+import baseApp, { getCookie, type ApprovedSession } from "./index";
 import { getSessionContext, writeSession } from "./auth";
 import { getAccountFromApiKey } from "./api-keys";
 import { d1ReplicaEligibleRequest, d1SessionBookmark, withD1Session } from "./d1-session";
@@ -39,11 +39,6 @@ function json(data: unknown, status = 200): Response {
     status,
     headers: { "Content-Type": "application/json", "Cache-Control": "no-store" },
   });
-}
-function getCookie(req: Request, name: string): string | null {
-  const cookie = req.headers.get("Cookie") ?? "";
-  const match = cookie.match(new RegExp(`(?:^|;\\s*)${name}=([^;]+)`));
-  return match ? match[1] : null;
 }
 function apiKeyRouteAllowed(method: string, pathname: string): boolean {
   if (
@@ -224,17 +219,22 @@ async function secureFetch(req: Request, env: Env, ctx: ExecutionContext): Promi
   if (isCrossSiteMutation(req, url, bearer)) {
     return withSecurityHeaders(json({ error: "Cross-site-begäran blockerad" }, 403), url.pathname);
   }
-  if (bearer && url.pathname.startsWith("/api/") && !apiKeyRouteAllowed(req.method, url.pathname)) {
-    const session = await getSessionContext(primaryEnv, getCookie(req, "session"));
+  const freshRequired = needsFreshSession(req.method, url.pathname);
+  const restrictedBearer =
+    bearer && url.pathname.startsWith("/api/") && !apiKeyRouteAllowed(req.method, url.pathname);
+  const sessionToken = getCookie(req, "session");
+  const session =
+    freshRequired || restrictedBearer ? await getSessionContext(primaryEnv, sessionToken) : null;
+  if (restrictedBearer) {
     if (!session)
       return withSecurityHeaders(
         json({ error: "API-nyckeln saknar behörighet för den här operationen" }, 403),
         url.pathname,
       );
   }
-  if (needsFreshSession(req.method, url.pathname)) {
-    const session = await getSessionContext(primaryEnv, getCookie(req, "session"));
-    if (!session)
+  let approvedSession: ApprovedSession | undefined;
+  if (freshRequired) {
+    if (!session?.account || !sessionToken)
       return withSecurityHeaders(
         json({ error: "Den här säkerhetsändringen kräver en vanlig webbsession" }, 403),
         url.pathname,
@@ -248,6 +248,8 @@ async function secureFetch(req: Request, env: Env, ctx: ExecutionContext): Promi
         url.pathname,
       );
   }
+  if ((freshRequired || restrictedBearer) && session?.account && sessionToken)
+    approvedSession = { token: sessionToken, account: session.account };
   if (
     req.method === "POST" &&
     (url.pathname === "/api/feedback" || url.pathname === "/api/client-error")
@@ -272,7 +274,7 @@ async function secureFetch(req: Request, env: Env, ctx: ExecutionContext): Promi
     }
   }
   const appEnv = await baseAppEnvForRequest(req, primaryEnv, bearer);
-  const response = await baseApp.fetch(req, appEnv, ctx);
+  const response = await baseApp.fetch(req, appEnv, ctx, approvedSession);
   try {
     await upgradeOAuthSession(req, primaryEnv, response);
   } catch {
