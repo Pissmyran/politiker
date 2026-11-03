@@ -133,18 +133,24 @@ export async function handleOAuthCallback(
     if (providerAlreadyLinked && providerAlreadyLinked.provider_user_id !== providerUserId) {
       throw new Error(`Kontot har redan ett annat ${provider}-inloggningssätt kopplat`);
     }
-    if (!providerAlreadyLinked) {
-      await env.DB.prepare(
-        "INSERT INTO oauth_identities (id, account_id, provider, provider_user_id, provider_email, created_at) VALUES (?, ?, ?, ?, ?, ?)",
-      )
-        .bind(randomId(), accountId, provider, providerUserId, email, Date.now())
-        .run();
-    }
+    const statements: D1PreparedStatement[] = [];
     if (!existingAccount.email_verified) {
-      await env.DB.prepare("UPDATE accounts SET email_verified = 1 WHERE id = ?")
-        .bind(accountId)
-        .run();
+      // A password supplied before mailbox verification cannot be trusted.
+      const { hash, salt } = await hashPassword(randomId() + randomId());
+      statements.push(
+        env.DB.prepare(
+          "UPDATE accounts SET password_hash = ?, password_salt = ?, password_set_by_user = 0, email_verified = 1 WHERE id = ? AND email_verified = 0",
+        ).bind(hash, salt, accountId),
+      );
     }
+    if (!providerAlreadyLinked) {
+      statements.push(
+        env.DB.prepare(
+          "INSERT INTO oauth_identities (id, account_id, provider, provider_user_id, provider_email, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+        ).bind(randomId(), accountId, provider, providerUserId, email, Date.now()),
+      );
+    }
+    if (statements.length) await env.DB.batch(statements);
     return { accountId };
   }
 
