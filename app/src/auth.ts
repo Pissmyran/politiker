@@ -71,14 +71,14 @@ async function credentialVersion(account: Record<string, unknown>): Promise<stri
 export async function writeSession(
   env: Env,
   sessionToken: string,
-  accountId: string,
+  account: Record<string, unknown>,
   authenticatedAt = Date.now(),
 ): Promise<void> {
-  const account = await getAccountById(env.DB, accountId);
-  if (!account || account.disabled) throw new Error("Konto saknas eller är inaktiverat");
+  // For local authentication, this must be the snapshot whose factors were verified.
+  if (account.disabled) throw new Error("Konto saknas eller är inaktiverat");
   const envelope: SessionEnvelope = {
-    accountId,
-    credentialVersion: await credentialVersion(account as Record<string, unknown>),
+    accountId: account.id as string,
+    credentialVersion: await credentialVersion(account),
     authenticatedAt,
   };
   await env.SESSIONS.put(`session:${sessionToken}`, JSON.stringify(envelope), {
@@ -210,7 +210,7 @@ export async function login(
 
   await clearAttempts(env, "login", email);
   const sessionToken = randomId() + randomId();
-  await writeSession(env, sessionToken, account.id as string);
+  await writeSession(env, sessionToken, account);
   return { sessionToken };
 }
 
@@ -223,7 +223,7 @@ export async function reauthenticateAccount(
   accountId: string,
   password?: string,
   totpCode?: string,
-): Promise<void> {
+): Promise<Record<string, unknown>> {
   const account = await getAccountById(env.DB, accountId);
   if (!account || account.disabled) throw new Error("Konto saknas eller är inaktiverat");
 
@@ -258,6 +258,7 @@ export async function reauthenticateAccount(
 
   if (!verifiedFactor) throw new Error("Bekräfta kontot med ditt externa inloggningssätt");
   await clearAttempts(env, "reauth", accountId);
+  return account;
 }
 
 export async function requestPasswordReset(env: Env, email: string): Promise<void> {

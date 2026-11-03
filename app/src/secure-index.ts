@@ -3,7 +3,7 @@ import { getSessionContext, writeSession } from "./auth";
 import { getAccountFromApiKey } from "./api-keys";
 import { d1ReplicaEligibleRequest, d1SessionBookmark, withD1Session } from "./d1-session";
 import { pruneVisits } from "./visits";
-import type { Env } from "./db";
+import { getAccountById, type Env } from "./db";
 import type { SendJobMessage } from "../../shared/types";
 import { enforceLetterRetention, protectStoredLetterData } from "./letter-privacy";
 
@@ -160,7 +160,9 @@ async function upgradeOAuthSession(req: Request, env: Env, response: Response): 
   const raw = await env.SESSIONS.get(`session:${token}`);
   if (!raw || raw.startsWith("{")) return;
   try {
-    await writeSession(env, token, raw, Date.now());
+    const account = await getAccountById(env.DB, raw);
+    if (!account) throw new Error("Konto saknas eller är inaktiverat");
+    await writeSession(env, token, account, Date.now());
   } catch (error) {
     await env.SESSIONS.delete(`session:${token}`).catch(() => {});
     throw error;
