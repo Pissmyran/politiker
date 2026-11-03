@@ -23,6 +23,8 @@ from pypdf import PdfReader
 import sources
 
 from politiker_common import (
+    ASCII_EMAIL_LOCAL_RE,
+    iter_email_matches,
     normalize_party,
     party_from_parens as _extract_party_from_parens,
     party_anywhere as _extract_party_anywhere,
@@ -642,7 +644,8 @@ async def scrape_mailto(context, namn, url):
         # Fallback: regex på sidans HTML (ingen namnkoppling möjlig härifrån)
         if len(people) < 3:
             content = await page.content()
-            for email in EMAIL_RE.findall(content):
+            for match in iter_email_matches(content, EMAIL_RE, ASCII_EMAIL_LOCAL_RE):
+                email = match.group(0)
                 if is_valid_email(email.lower()):
                     people.add(("", email.lower(), None, None))
 
@@ -666,7 +669,7 @@ async def scrape_pdf_lista(context, namn, url, domain):
         reader = PdfReader(BytesIO(data))
         text = "\n".join(page.extract_text() or "" for page in reader.pages)
         for line in text.splitlines():
-            match = EMAIL_RE.search(line)
+            match = next(iter_email_matches(line, EMAIL_RE, ASCII_EMAIL_LOCAL_RE), None)
             if not match:
                 continue
             email = match.group(0).lower()

@@ -32,6 +32,7 @@ import requests
 
 import sources
 from d1 import D1Client
+from politiker_common import ASCII_EMAIL_LOCAL_RE, iter_email_matches
 
 UA = {"User-Agent": os.environ.get("SCRAPER_USER_AGENT", "politiker-contact-refresh/1.0")}
 EMAIL_RE = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
@@ -89,7 +90,7 @@ def scrape_staff_page(url: str, organisation: str, role: str, domain: str) -> li
     lines = [re.sub(r"\s+", " ", x).strip() for x in text.splitlines() if x.strip()]
     rows: list[Contact] = []
     for i, line in enumerate(lines):
-        m = EMAIL_RE.search(line)
+        m = next(iter_email_matches(line, EMAIL_RE, ASCII_EMAIL_LOCAL_RE), None)
         if not m or not m.group(0).lower().endswith("@" + domain):
             continue
         email = m.group(0).lower()
@@ -119,7 +120,7 @@ def scrape_public_emails(
         print(f"VARNING: kunde inte läsa {url}: {exc}", file=sys.stderr)
         return []
     rows = []
-    for email in sorted({m.group(0).lower() for m in EMAIL_RE.finditer(text)}):
+    for email in sorted({m.group(0).lower() for m in iter_email_matches(text, EMAIL_RE, ASCII_EMAIL_LOCAL_RE)}):
         if not email.endswith("@" + domain) or not is_editorial_email(email):
             continue
         if email.split("@", 1)[0] in skip_locals:
@@ -152,7 +153,7 @@ def scrape_recent_section_authors(section_url: str, organisation: str, role: str
             raw = fetch_html(url)
         except Exception:
             continue
-        for email in sorted({m.group(0).lower() for m in EMAIL_RE.finditer(visible_text(raw))}):
+        for email in sorted({m.group(0).lower() for m in iter_email_matches(visible_text(raw), EMAIL_RE, ASCII_EMAIL_LOCAL_RE)}):
             if email.endswith("@" + domain) and is_editorial_email(email):
                 rows.append(Contact(display_name_from_email(email), email, organisation, role, url))
     return rows
