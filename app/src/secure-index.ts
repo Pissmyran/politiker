@@ -1,5 +1,5 @@
 import baseApp from "./index";
-import { getSessionContext, writeSession } from "./auth";
+import { getCookie, getSessionContext, writeSession, type RequestAuthentication } from "./auth";
 import { getAccountFromApiKey } from "./api-keys";
 import { d1ReplicaEligibleRequest, d1SessionBookmark, withD1Session } from "./d1-session";
 import { pruneVisits } from "./visits";
@@ -39,11 +39,6 @@ function json(data: unknown, status = 200): Response {
     status,
     headers: { "Content-Type": "application/json", "Cache-Control": "no-store" },
   });
-}
-function getCookie(req: Request, name: string): string | null {
-  const cookie = req.headers.get("Cookie") ?? "";
-  const match = cookie.match(new RegExp(`(?:^|;\\s*)${name}=([^;]+)`));
-  return match ? match[1] : null;
 }
 function apiKeyRouteAllowed(method: string, pathname: string): boolean {
   if (
@@ -200,18 +195,9 @@ function withSecurityHeaders(response: Response, pathname: string): Response {
   });
 }
 
-async function baseAppEnvForRequest(req: Request, primaryEnv: Env, bearer: boolean): Promise<Env> {
+function baseAppEnvForRequest(req: Request, primaryEnv: Env, auth: RequestAuthentication): Env {
   const pathname = new URL(req.url).pathname;
-  if (!d1ReplicaEligibleRequest(req.method, pathname)) return primaryEnv;
-
-  let authenticated = Boolean(
-    (await getSessionContext(primaryEnv, getCookie(req, "session")))?.account,
-  );
-  if (!authenticated && bearer) {
-    const token = req.headers.get("Authorization")?.slice("Bearer ".length) ?? "";
-    authenticated = Boolean(await getAccountFromApiKey(primaryEnv, token));
-  }
-  if (!authenticated) return primaryEnv;
+  if (!auth || !d1ReplicaEligibleRequest(req.method, pathname)) return primaryEnv;
 
   const bookmark = d1SessionBookmark(primaryEnv);
   return withD1Session(primaryEnv, bookmark ?? "first-unconstrained");
@@ -221,25 +207,34 @@ async function secureFetch(req: Request, env: Env, ctx: ExecutionContext): Promi
   const url = new URL(req.url);
   const primaryEnv = withD1Session(env, "first-primary");
   const bearer = req.headers.get("Authorization")?.startsWith("Bearer ") === true;
-  if (isCrossSiteMutation(req, url, bearer)) {
+  const sessionToken = url.pathname.startsWith("/api/") ? getCookie(req, "session") : null;
+  const session = await getSessionContext(primaryEnv, sessionToken);
+  let auth: RequestAuthentication =
+    session?.account && sessionToken
+      ? {
+          type: "session",
+          account: session.account,
+          sessionToken,
+          authenticatedAt: session.authenticatedAt,
+        }
+      : null;
+  if (isCrossSiteMutation(req, url, bearer && !auth)) {
     return withSecurityHeaders(json({ error: "Cross-site-begäran blockerad" }, 403), url.pathname);
   }
   if (bearer && url.pathname.startsWith("/api/") && !apiKeyRouteAllowed(req.method, url.pathname)) {
-    const session = await getSessionContext(primaryEnv, getCookie(req, "session"));
-    if (!session)
+    if (auth?.type !== "session")
       return withSecurityHeaders(
         json({ error: "API-nyckeln saknar behörighet för den här operationen" }, 403),
         url.pathname,
       );
   }
   if (needsFreshSession(req.method, url.pathname)) {
-    const session = await getSessionContext(primaryEnv, getCookie(req, "session"));
-    if (!session)
+    if (auth?.type !== "session")
       return withSecurityHeaders(
         json({ error: "Den här säkerhetsändringen kräver en vanlig webbsession" }, 403),
         url.pathname,
       );
-    if (Date.now() - session.authenticatedAt > FRESH_AUTH_MS)
+    if (Date.now() - auth.authenticatedAt > FRESH_AUTH_MS)
       return withSecurityHeaders(
         json(
           { error: "Bekräfta att det är du för att fortsätta", code: "FRESH_AUTH_REQUIRED" },
@@ -247,6 +242,13 @@ async function secureFetch(req: Request, env: Env, ctx: ExecutionContext): Promi
         ),
         url.pathname,
       );
+  }
+  if (!auth && bearer && url.pathname.startsWith("/api/")) {
+    const account = await getAccountFromApiKey(
+      primaryEnv,
+      req.headers.get("Authorization")!.slice(7),
+    );
+    if (account) auth = { type: "apiKey", account };
   }
   if (
     req.method === "POST" &&
@@ -271,8 +273,8 @@ async function secureFetch(req: Request, env: Env, ctx: ExecutionContext): Promi
       );
     }
   }
-  const appEnv = await baseAppEnvForRequest(req, primaryEnv, bearer);
-  const response = await baseApp.fetch(req, appEnv, ctx);
+  const appEnv = baseAppEnvForRequest(req, primaryEnv, auth);
+  const response = await baseApp.fetch(req, appEnv, ctx, auth);
   try {
     await upgradeOAuthSession(req, primaryEnv, response);
   } catch {

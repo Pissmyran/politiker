@@ -2,7 +2,8 @@ import {
   signup,
   verifyEmail,
   login,
-  getAccountFromSession,
+  getCookie,
+  type RequestAuthentication,
   requestPasswordReset,
   resetPassword,
   startTotpSetup,
@@ -54,7 +55,7 @@ import {
 } from "./send";
 import { submitFeedback, reportClientError } from "./feedback";
 import { processAttachments, type AttachmentInput } from "./attachments";
-import { createApiKey, listApiKeys, revokeApiKey, getAccountFromApiKey } from "./api-keys";
+import { createApiKey, listApiKeys, revokeApiKey } from "./api-keys";
 import {
   getAuthorizeUrl,
   handleOAuthCallback,
@@ -91,11 +92,6 @@ function json(data: unknown, status = 200): Response {
     headers: { "Content-Type": "application/json" },
   });
 }
-function getCookie(req: Request, name: string): string | null {
-  const cookie = req.headers.get("Cookie") ?? "";
-  const match = cookie.match(new RegExp(`${name}=([^;]+)`));
-  return match ? match[1] : null;
-}
 function setSessionCookie(token: string): string {
   return `session=${token}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=${60 * 60 * 24 * 30}`;
 }
@@ -107,10 +103,15 @@ function requestedRetentionMs(req: Request): number {
 }
 
 export default {
-  async fetch(req: Request, env: Env, execCtx: ExecutionContext): Promise<Response> {
+  async fetch(
+    req: Request,
+    env: Env,
+    execCtx: ExecutionContext,
+    auth: RequestAuthentication = null,
+  ): Promise<Response> {
     const url = new URL(req.url);
     if (req.method === "GET" && url.pathname === "/") execCtx.waitUntil(recordVisit(env, req));
-    const resp = await handleRequest(req, env, url);
+    const resp = await handleRequest(req, env, url, auth);
     const headers = new Headers(resp.headers);
     headers.delete("Speculation-Rules");
     headers.set("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
@@ -123,8 +124,7 @@ export default {
     ) {
       try {
         const data = await resp.clone().json<{ error?: string }>();
-        const sessionToken = getCookie(req, "session");
-        const account = sessionToken ? await getAccountFromSession(env, sessionToken) : null;
+        const account = auth?.type === "session" ? auth.account : null;
         await env.DB.prepare(
           "INSERT INTO worker_errors (id, account_id, method, endpoint, status, error_message, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
         )
@@ -223,7 +223,7 @@ const AUTHED_ROUTES: RouteDef[] = [
     h: async (c) => {
       const { password, totpCode } = await c.req.json<{ password?: string; totpCode?: string }>();
       await deleteOwnAccount(c.env, c.accountId, password, totpCode);
-      const token = getCookie(c.req, "session");
+      const token = c.sessionToken;
       if (token) await c.env.SESSIONS.delete(`session:${token}`);
       const resp = json({ ok: true });
       resp.headers.set("Set-Cookie", "session=; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=0");
@@ -661,7 +661,12 @@ const ADMIN_ROUTES: RouteDef[] = [
   },
 ];
 
-async function handleRequest(req: Request, env: Env, url: URL): Promise<Response> {
+async function handleRequest(
+  req: Request,
+  env: Env,
+  url: URL,
+  auth: RequestAuthentication,
+): Promise<Response> {
   const oauthMatch = url.pathname.match(/^\/api\/oauth\/([a-z]+)\/(start|callback)$/);
   if (oauthMatch) {
     const [, provider, step] = oauthMatch;
@@ -679,8 +684,7 @@ async function handleRequest(req: Request, env: Env, url: URL): Promise<Response
       await env.SESSIONS.delete(`oauthstate:${state}`);
       if (storedState.startsWith("link:")) {
         const linkAccountId = storedState.slice(5),
-          sessionToken = getCookie(req, "session"),
-          account = await getAccountFromSession(env, sessionToken);
+          account = auth?.type === "session" ? auth.account : null;
         if (!account || (account.id as string) !== linkAccountId)
           return json({ error: "State tillhör en annan session — försök igen" }, 400);
         await handleOAuthLinkCallback(provider, env, code, linkAccountId);
@@ -702,8 +706,7 @@ async function handleRequest(req: Request, env: Env, url: URL): Promise<Response
   if (oauthMailMatch) {
     const [, step] = oauthMailMatch;
     try {
-      const sessionToken = getCookie(req, "session"),
-        account = await getAccountFromSession(env, sessionToken);
+      const account = auth?.type === "session" ? auth.account : null;
       if (!account) return json({ error: "Inte inloggad" }, 401);
       if (step === "start") {
         if (!env.OAUTH_MICROSOFT_CLIENT_ID)
@@ -741,8 +744,7 @@ async function handleRequest(req: Request, env: Env, url: URL): Promise<Response
   if (oauthLinkMatch) {
     const [, provider, step] = oauthLinkMatch;
     try {
-      const sessionToken = getCookie(req, "session"),
-        account = await getAccountFromSession(env, sessionToken);
+      const account = auth?.type === "session" ? auth.account : null;
       if (!account) return json({ error: "Inte inloggad" }, 401);
       if (step === "start") {
         const state = randomId();
@@ -777,13 +779,8 @@ async function handleRequest(req: Request, env: Env, url: URL): Promise<Response
 
   if (!url.pathname.startsWith("/api/")) return env.ASSETS.fetch(req);
   try {
-    const sessionToken = getCookie(req, "session");
-    let account = await getAccountFromSession(env, sessionToken);
-    if (!account) {
-      const authHeader = req.headers.get("Authorization");
-      if (authHeader?.startsWith("Bearer "))
-        account = await getAccountFromApiKey(env, authHeader.slice(7));
-    }
+    const sessionToken = auth?.type === "session" ? auth.sessionToken : null;
+    const account = auth?.account ?? null;
     if (url.pathname === "/api/signup" && req.method === "POST") {
       const { email, password, turnstileToken } = await req.json<{
         email: string;
@@ -819,7 +816,8 @@ async function handleRequest(req: Request, env: Env, url: URL): Promise<Response
       return resp;
     }
     if (url.pathname === "/api/logout" && req.method === "POST") {
-      if (sessionToken) await env.SESSIONS.delete(`session:${sessionToken}`);
+      const token = getCookie(req, "session");
+      if (token) await env.SESSIONS.delete(`session:${token}`);
       const resp = json({ ok: true });
       resp.headers.set("Set-Cookie", "session=; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=0");
       return resp;

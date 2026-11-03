@@ -53,6 +53,26 @@ export interface SessionContext {
   authenticatedAt: number;
 }
 
+export type RequestAuthentication =
+  | {
+      type: "session";
+      account: NonNullable<SessionContext["account"]>;
+      sessionToken: string;
+      authenticatedAt: number;
+    }
+  | { type: "apiKey"; account: NonNullable<SessionContext["account"]> }
+  | null;
+
+export function getCookie(req: Request, name: string): string | null {
+  const cookie = req.headers.get("Cookie") ?? "";
+  const prefix = `${name}=`;
+  const entry = cookie
+    .split(";")
+    .map((part) => part.trim())
+    .find((part) => part.startsWith(prefix));
+  return entry?.slice(prefix.length) || null;
+}
+
 async function credentialVersion(account: Record<string, unknown>): Promise<string> {
   // Bind sessionen till de autentiseringsuppgifter som gällde när den skapades.
   // Lösenordsbyte/reset och TOTP-byte ändrar fingeravtrycket och återkallar
