@@ -98,11 +98,14 @@ The container speaks plain HTTP on port 8787. Put it behind a reverse proxy with
   - Sign-in attempts are limited in a serialized Durable Object.
   - The users' email credentials and letter content are encrypted with AES-GCM.
   - Changing requests require same-origin, and responses have a strict CSP.
-- **The image** is based on `node:24-trixie-slim` (Node LTS on Debian stable), runs as the `node` user and has a healthcheck. It only contains source code with placeholders; your values are filled in when the container starts.
+- **The image** is based on `node:26.13.0-trixie-slim` (Node 26 on Debian 13, stable; the version is maintained by Renovate), runs as the `node` user and has a healthcheck. It only contains source code with placeholders; your values are filled in when the container starts.
 - **Limits:** `wrangler dev` is a development server that runs one process on one machine. That is enough for a group or association, but gives no Cloudflare scaling. The contact directory of politicians is not included; the administrator or the users fill it.
 - **Troubleshooting:** `docker compose logs -f`. The administrator sees sends, accounts and statistics in the admin view.
 
 ## Changelog
+
+**0.12.3**
+- The image runs on `node:24-trixie-slim`: Node 24 on Debian 13 (stable). The contact scraper image is based on `ubuntu:latest` with Playwright from `requirements.txt`.
 
 **0.12.2**
 - `tools/render.mjs` writes each filled-in file in a loop until every byte is written, so a short write cannot leave a truncated file.
