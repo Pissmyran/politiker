@@ -20,5 +20,8 @@
   "dependencies": {
     "mammoth": "^1.13.0",
     "unpdf": "^2.1.0"
+  },
+  "overrides": {
+    "minimatch": "^11.0.1"
   }
 }
