@@ -85,6 +85,7 @@ function needsFreshSession(method: string, pathname: string): boolean {
       "/api/totp/confirm",
       "/api/totp/disable",
       "/api/set-password",
+      "/api/delete-account",
       "/api/api-keys",
       "/api/mail-credentials",
     ].includes(pathname) ||

@@ -30,6 +30,14 @@ Logging: every log (sampling 1, with invocation logs), traces at 1 %, query stri
 
 Accounts and everything that belongs to them live in D1, the sessions in KV. Sign-in is with a password (with optional TOTP) or with Google or Microsoft. Sensitive actions, such as changing a saved email account, require that the sign-in is at most 15 minutes old; otherwise the page asks you to confirm again.
 
+<!-- coderabbit-ai-generated:v1 -->
+
+<!-- coderabbit-ai-generated-section:v1:05dd6da1cb27ef3981327475a1229bde4381821b5a524d45515bc19d60a14830 -->
+
+Account deletion also requires a sign-in at most 15 minutes old and checks the account’s own factors. Factor checks for deletion, reauthentication and TOTP sign-in share a Durable Object limit per account: ten attempts, refilling one attempt every 90 seconds. Successful checks count too.
+
+<!-- /coderabbit-ai-generated:v1 -->
+
 ## The public register
 
 `public_contacts` is the shared register: politicians at every level, authorities, newsrooms, the Church of Sweden and academics. `area_type` tells the groups apart. Academics also have a university, unit, title, field and source page. `public_contact_assignments` links municipal and regional politicians to committees and boards for filtering by policy area.

@@ -44,6 +44,14 @@ cd kontakter && pip install -r requirements-dev.txt requests pypdf dnspython && 
 - **Release:** versionen finns i `version.txt`.
 - **Extra noggrant:** inloggning och OAuth, utskickskön, krypterade uppgifter, kontaktverktygen och migreringar.
 
+<!-- coderabbit-ai-generated:v1 -->
+
+<!-- coderabbit-ai-generated-section:v1:a8f0821a9d7a4ce667f486a1f033d54d40e4295c8275dcc1f450b51303454022 -->
+
+Factor checks for account deletion, reauthentication and TOTP sign-in share an atomic Durable Object limit per account.
+
+<!-- /coderabbit-ai-generated:v1 -->
+
 ## Repository review guidance
 
 `.coderabbit.yaml` inherits from `pissmyran/coderabbit/.coderabbit.yaml` with

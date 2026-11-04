@@ -6,6 +6,14 @@ PolitikerKontakt lets you write to politicians, authorities, newsrooms and resea
 
 It runs as a Cloudflare Worker with D1, KV, R2, a queue and a Durable Object, or as a ready-made Docker image. The tools in `kontakter/` keep the public register up to date.
 
+<!-- coderabbit-ai-generated:v1 -->
+
+<!-- coderabbit-ai-generated-section:v1:33c6c9e89dcc12a18556dbb344e4036050b8ce12234b9f06a7513fc6ec0fdb9f -->
+
+Account deletion requires a recently authenticated session; factor checks for deletion, reauthentication and TOTP sign-in share an account-scoped attempt limit.
+
+<!-- /coderabbit-ai-generated:v1 -->
+
 ## Tests
 
 From `app/`:

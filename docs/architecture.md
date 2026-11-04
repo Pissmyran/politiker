@@ -30,6 +30,14 @@ Loggning: alla loggar (sampling 1, med anropsloggar), spårningar till 1 %, frå
 
 Konton och allt som hör till dem ligger i D1, sessionerna i KV. Inloggning sker med lösenord (med valfri TOTP) eller med Google eller Microsoft. Känsliga åtgärder, som att ändra ett sparat e-postkonto, kräver att inloggningen är högst 15 minuter gammal; annars ber sidan dig bekräfta igen.
 
+<!-- coderabbit-ai-generated:v1 -->
+
+<!-- coderabbit-ai-generated-section:v1:a20f7d94cce0c58137eab831c79b62ca830dcfe1171a316adc47b4e4042f0602 -->
+
+Kontoradering kräver också en högst 15 minuter gammal inloggning och kontrollerar kontots egna faktorer. Faktorkontroller vid radering, återautentisering och TOTP-inloggning delar en Durable Object-gräns per konto: tio försök med påfyllning av ett försök per 90 sekunder. Även lyckade kontroller räknas.
+
+<!-- /coderabbit-ai-generated:v1 -->
+
 ## Det offentliga registret
 
 `public_contacts` är det gemensamma registret: politiker på alla nivåer, myndigheter, redaktioner, Svenska kyrkan och akademiker. `area_type` skiljer grupperna åt. Akademiker har dessutom lärosäte, enhet, titel, område och källsida. `public_contact_assignments` kopplar kommun- och regionpolitiker till nämnder och styrelser för filtrering på sakområde.

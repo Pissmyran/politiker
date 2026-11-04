@@ -36,6 +36,27 @@ const LOGIN_WINDOW_SECONDS = 15 * 60;
 const CODE_MAX_ATTEMPTS = 10;
 const CODE_WINDOW_SECONDS = 60 * 60;
 
+// Reserve a token before checking a factor. The Durable Object serializes
+// concurrent attempts across login, reauthentication and account deletion.
+async function reserveAccountFactorAttempt(env: Env, accountId: string): Promise<void> {
+  const id = env.RATE_LIMITER.idFromName(`account-factor:${accountId}`);
+  let granted = false;
+  try {
+    const response = await env.RATE_LIMITER.get(id).fetch("https://rate-limiter/acquire", {
+      method: "POST",
+      body: JSON.stringify({
+        capacity: LOGIN_MAX_ATTEMPTS,
+        refillPerMinute: LOGIN_MAX_ATTEMPTS / (LOGIN_WINDOW_SECONDS / 60),
+      }),
+    });
+    const result = await response.json<{ granted?: boolean }>();
+    granted = response.ok && result.granted === true;
+  } catch {
+    // Fail closed if the limiter is unavailable.
+  }
+  if (!granted) throw new Error("För många försök — vänta en stund och försök igen.");
+}
+
 // Dummy-hash att verifiera mot när e-posten inte finns, så att en inloggning
 // mot en okänd adress kostar lika mycket tid (PBKDF2) som en mot en känd —
 // annars skulle svarstiden avslöja vilka adresser som är registrerade.
@@ -201,6 +222,7 @@ export async function login(
 
   if (account.totp_enabled) {
     if (!totpCode) throw new Error("TOTP_REQUIRED");
+    await reserveAccountFactorAttempt(env, account.id as string);
     const validTotp = await verifyTotpCode(account.totp_secret as string, totpCode);
     if (!validTotp) {
       await recordFailedAttempt(env, "login", email, LOGIN_WINDOW_SECONDS);
@@ -231,6 +253,10 @@ export async function reauthenticateAccount(
     max: LOGIN_MAX_ATTEMPTS,
     windowSeconds: LOGIN_WINDOW_SECONDS,
   });
+
+  if (account.password_set_by_user || (account.totp_enabled && totpCode)) {
+    await reserveAccountFactorAttempt(env, accountId);
+  }
 
   let verifiedFactor = false;
   if (account.password_set_by_user) {
@@ -400,6 +426,10 @@ export async function deleteOwnAccount(
 ): Promise<void> {
   const account = await getAccountById(env.DB, accountId);
   if (!account) throw new Error("Konto saknas");
+
+  if (account.password_set_by_user || (account.totp_enabled && totpCode)) {
+    await reserveAccountFactorAttempt(env, accountId);
+  }
 
   if (account.password_set_by_user) {
     const ok = await verifyPassword(
