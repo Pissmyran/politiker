@@ -22,7 +22,7 @@ npm run dev
 
 ## Deployment
 
-Production is deployed from a rendered copy, either from your computer or with Workers Builds when a PR is merged to `main`; see the [home page](index.md). CI on GitHub runs tests, the Docker build and CodeQL. There is no preview environment. The contact register is updated separately, not at deployment.
+Production is deployed from a rendered copy, either from your computer or with Workers Builds when a PR is merged to `main`; see the [home page](index.md). CI on GitHub runs no tests: run the checks above yourself before every push. The workflows build the documentation (Pages and wiki), create the release and publish the Docker image, and CodeQL scans the code. There is no preview environment. The contact register is updated separately, not at deployment.
 
 ## Migrations
 

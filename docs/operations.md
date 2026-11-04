@@ -22,7 +22,7 @@ npm run dev
 
 ## Driftsättning
 
-Produktionen driftsätts från en renderad kopia, antingen från din dator eller med Workers Builds när en PR mergas till `main`; se `README.md`. CI på GitHub kör tester, Docker-bygge och CodeQL. Det finns ingen förhandsmiljö. Kontaktregistret uppdateras separat, inte vid driftsättning.
+Produktionen driftsätts från en renderad kopia, antingen från din dator eller med Workers Builds när en PR mergas till `main`; se `README.md`. CI på GitHub kör inga tester: kör kontrollerna ovan själv före varje push. Workflows bygger dokumentationen (Pages och wiki), skapar release och publicerar Docker-imagen, och CodeQL skannar koden. Det finns ingen förhandsmiljö. Kontaktregistret uppdateras separat, inte vid driftsättning.
 
 ## Migreringar
 
