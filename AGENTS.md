@@ -32,6 +32,7 @@ cd kontakter && pip install -r requirements-dev.txt requests pypdf dnspython && 
 
 ## Regler
 
+- **Arbeta självständigt:** gör uppgiften själv i stället för att lämna tillbaka steg till användaren. Fråga bara om beslut som verkligen är deras. Är något blockerat, säg tydligt vad och varför; säg aldrig åt användaren att göra jobbet eller kontrollera sådant du kan kontrollera själv.
 - **Ingång:** `app/src/access-index.ts`. Hanterare: fetch, queue, scheduled `* * * * *`. Bindningar: D1, KV, R2, Queue, Durable Object, send_email, Assets. Driftsätt med `--cwd build/app`.
 - **När du ändrar kod:** förenkla och städa det du rör, så länge det inte breddar ändringen eller ändrar beteendet. Ta bort gammal kompatibilitetskod först när det är bekräftat att inget använder den.
 - **D1 är enda sanningen.** Konton, OAuth (Google/Microsoft), TOTP och API-nycklar ligger i D1, sessioner i KV. KV, R2, kön och Durable Object har var sin avgränsad roll.
