@@ -42,12 +42,12 @@ Koden innehåller inga kontouppgifter. Där ett eget värde behövs, som domän,
 
 ## Köra med Docker
 
-PolitikerKontakt finns som färdig image på Docker Hub, `docker.io/pissmyran/politiker`. Du behöver inte bygga något själv: i `docker-compose.yml` står imagen så här, och `docker compose up -d` hämtar den.
+PolitikerKontakt finns som färdig image på Docker Hub, `docker.io/driftaegis/politiker`. Du behöver inte bygga något själv: i `docker-compose.yml` står imagen så här, och `docker compose up -d` hämtar den.
 
 I `docker-compose.yml`:
 
 ```yaml
-    image: docker.io/pissmyran/politiker:0
+    image: docker.io/driftaegis/politiker:0
 ```
 
 Taggen `0` ger alla uppdateringar inom version 0; `X.Y` ger bara rättningar och `X.Y.Z` exakt en version. Alla inställningar beskrivs i [docker/README.md](docker/README.md), och ändringarna listas i [CHANGELOG.md](CHANGELOG.md). Vill du bygga imagen själv från källkoden: `docker build -t politiker .` i repots rot.
