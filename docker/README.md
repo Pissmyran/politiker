@@ -6,7 +6,7 @@ Imagen startar tom: det finns inga konton och ingen kontaktkatalog. Du behöver 
 
 ## Kom igång
 
-Imagen ligger på Docker Hub som `docker.io/driftaegis/politiker`. Compose-filen nedan hämtar den därifrån, så du behöver varken klona repot eller bygga något.
+Imagen ligger på Docker Hub som `docker.io/pissmyran/politiker`. Compose-filen nedan hämtar den därifrån, så du behöver varken klona repot eller bygga något.
 
 1. **Installera Docker.** På Windows och Mac: [Docker Desktop](https://www.docker.com/products/docker-desktop/). På Linux: paketet `docker.io` (Debian/Ubuntu) eller motsvarande. Podman fungerar också.
 2. **Skapa en mapp** och en fil i den som heter `docker-compose.yml`. Klistra in innehållet nedan.
@@ -18,7 +18,7 @@ Imagen ligger på Docker Hub som `docker.io/driftaegis/politiker`. Compose-filen
 ```yaml
 services:
   politiker:
-    image: docker.io/driftaegis/politiker:0
+    image: docker.io/pissmyran/politiker:0
     restart: unless-stopped
     ports:
       - "8787:8787"
