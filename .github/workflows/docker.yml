@@ -49,20 +49,19 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           printf '%s' "$DOCKERHUB_TOKEN" | docker login docker.io -u "$DOCKERHUB_USERNAME" --password-stdin
-          # Every check does a fresh lookup of the release tags. A failed lookup fails the job,
-          # so an API error can never look like "no other releases".
-          newest() {
-            local tags
-            tags=$(gh api --paginate "repos/$GITHUB_REPOSITORY/git/matching-refs/tags/v" --jq '.[].ref | ltrimstr("refs/tags/v")') || return 2
-            { printf '%s\n' "$tags"; echo "$VERSION"; } | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' | grep -E "$1" | sort -V | tail -n1
-          }
           # True when this release is the newest one the moving tag $1 can stand for.
-          # A prerelease never moves a moving tag.
+          # Every check does a fresh lookup of the release tags. A failed lookup fails the job
+          # (moving tags pushed before that point stay as they are), so an API error can never
+          # look like "no other releases". A prerelease never moves a moving tag, and neither
+          # does a version that has no v-tag yet (for example a manual run on an unreleased one).
           may_move() {
-            local re top
+            local re tags top
             case $VERSION in *-*) return 1 ;; esac
+            tags=$(gh api --paginate "repos/$GITHUB_REPOSITORY/git/matching-refs/tags/v" --jq '.[].ref | ltrimstr("refs/tags/v")') ||
+              { echo "::error::Could not list the repository's release tags; moving tags pushed before this point were left as they are."; exit 1; }
+            printf '%s\n' "$tags" | grep -qxF "$VERSION" || return 1
             if [ "$1" = latest ]; then re='.'; else re="^${1//./\\.}\\."; fi
-            top=$(newest "$re") || { echo "::error::Could not list the repository's release tags; no moving tag was changed."; exit 1; }
+            top=$(printf '%s\n' "$tags" | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' | grep -E "$re" | sort -V | tail -n1)
             [ "$top" = "$VERSION" ]
           }
           major=${VERSION%%.*}
