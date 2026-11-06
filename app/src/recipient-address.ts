@@ -59,7 +59,7 @@ export function parseIncludedRecipient(value: string): { email: string; name: st
       !raw.endsWith(">") ||
       !address ||
       address.includes(">") ||
-      /[\r\n\u2028\u2029]/.test(displayName)
+      /[\r\n\u0085\u2028\u2029]/.test(displayName)
     )
       return null;
     emailInput = address;
