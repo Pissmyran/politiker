@@ -32,7 +32,7 @@ Production is deployed from a rendered copy, either from your computer or with W
 - **Token:** the secret `DOCKERHUB_TOKEN` lives in the `release` environment.
 - **Missing variable:** the run stops at once with a clear error, before anything is built or published. The GitHub release already exists by then. Set the variable and re-run the workflow.
 - **Tags:** the exact version is pushed first. The moving tags (`minor`, `major`, `latest`) are only moved by the newest stable release they stand for; an older version or a prerelease moves none. A failed push of one moving tag does not stop the others but fails the job, and a re-run pushes all tags again. If the list of release tags cannot be fetched, the job stops without changing any moving tag.
-- **Concurrency:** each tag has its own run, and no run is cancelled.
+- **Concurrency:** each release has its own run, and no run is replaced or cancelled. The release tags are looked up again before and after every push of a moving tag; if a newer release appears while the tag is being pushed, the job fails, and re-running that newer release's workflow puts its image back on the tag.
 
 ## Migrations
 
