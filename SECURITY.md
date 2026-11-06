@@ -1,21 +1,21 @@
 # Security Policy
 
-## Supported Versions
+## Reporting a vulnerability
 
-Use this section to tell people about which versions of your project are
-currently being supported with security updates.
+Do not open a public issue for a vulnerability.
 
-| Version | Supported          |
-| ------- | ------------------ |
-| 5.1.x   | :white_check_mark: |
-| 5.0.x   | :x:                |
-| 4.0.x   | :white_check_mark: |
-| < 4.0   | :x:                |
+Report it privately through GitHub:
 
-## Reporting a Vulnerability
+1. Open the Security tab of this repository.
+2. Click "Report a vulnerability".
+3. Describe the problem and how to reproduce it.
 
-Use this section to tell people how to report a vulnerability.
+Reports are handled by a single maintainer on a best-effort basis. There is no guaranteed response time.
 
-Tell them where to go, how often they can expect to get an update on a
-reported vulnerability, what to expect if the vulnerability is accepted or
-declined, etc.
+## Supported versions
+
+Only the latest release and the default branch receive security fixes.
+
+## Scope
+
+Vulnerabilities in this repository's own code and configuration. Problems in third-party dependencies should be reported to those projects.

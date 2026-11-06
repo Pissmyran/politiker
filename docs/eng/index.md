@@ -42,12 +42,12 @@ The code contains no account details. Wherever a value of your own is needed, su
 
 ## Running with Docker
 
-PolitikerKontakt is available as a ready-made image on Docker Hub, `docker.io/driftaegis/politiker`. You do not need to build anything: `docker-compose.yml` names the image like this, and `docker compose up -d` pulls it.
+PolitikerKontakt is available as a ready-made image on Docker Hub, `docker.io/pissmyran/politiker`. You do not need to build anything: `docker-compose.yml` names the image like this, and `docker compose up -d` pulls it.
 
 In `docker-compose.yml`:
 
 ```yaml
-    image: docker.io/driftaegis/politiker:0
+    image: docker.io/pissmyran/politiker:0
 ```
 
 The tag `0` gives every update within version 0; `X.Y` gives only fixes and `X.Y.Z` exactly one version. Every setting is described on the [Docker](docker.md) page, and the changes are listed in [CHANGELOG.md](../../CHANGELOG.md). To build the image yourself from source: `docker build -t politiker .` in the repo root.
@@ -60,6 +60,8 @@ CodeRabbit inherits the central configuration in `pissmyran/coderabbit/.coderabb
 through `inheritance: true`. Local review guidance also covers attachments and
 document imports, browser behavior and accessibility, app tests, queue recovery,
 migrations, lockfiles and the English documentation mirror. See [operations](operations.md#repository-review-configuration).
+
+**Publishing the Docker image:** `.github/workflows/docker.yml` takes the Docker Hub namespace from the repository variable `DOCKERHUB_USERNAME`, the image name from the GitHub repository name, and the token from the secret `DOCKERHUB_TOKEN` (the token lives in the `release` environment). If the variable is not set, the run stops at once with a clear error, before anything is built or published. The GitHub release already exists by then: set the variable and re-run the workflow, which pushes the exact version and every moving tag it is entitled to. The moving tags (`minor`, `major`, `latest`) are only moved by the newest stable release they stand for: a prerelease moves none, and re-running an older release moves only those of the `minor` and `major` tags of its own line for which it is still the newest (never `latest`). A version without a `v` release tag on the commit being published moves no moving tag. The release tags are looked up again before and after each moving-tag push; if the lookup fails, or a newer release appears meanwhile, the run fails and moving tags already pushed stay as they are, so inspect them before recovering. A missed release (a replaced `Release` run) is recovered as described in [operations](operations.md).
 
 ## License
 

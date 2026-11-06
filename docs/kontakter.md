@@ -38,7 +38,7 @@ Skripten som använder D1:s HTTP-API läser variablerna ur miljön. `sanitize_d1
 
 ## Kvartalskörningen
 
-`kontakter/scraper/quarterly_refresh.sh` kör alla verktygen i rätt ordning och sist `sanitize_d1.py --apply`. Den är tänkt att schemaläggas var tredje månad. Om schemaläggaren använder en fil med variablerna sätter den `POLITIKER_ENV_FILE` till den filen; skriptet stoppar om `CONTACT_SOURCES_DIR` saknas.
+`kontakter/scraper/quarterly_refresh.sh` kör alla verktygen utom `verify/verify_emails.py` i rätt ordning och sist `sanitize_d1.py --apply`. Den är tänkt att schemaläggas var tredje månad. Om schemaläggaren använder en fil med variablerna sätter den `POLITIKER_ENV_FILE` till den filen; skriptet stoppar om `CONTACT_SOURCES_DIR` saknas.
 
 ## Tester
 

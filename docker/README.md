@@ -6,7 +6,7 @@ Imagen startar tom: det finns inga konton och ingen kontaktkatalog. Du behöver 
 
 ## Kom igång
 
-Imagen ligger på Docker Hub som `docker.io/driftaegis/politiker`. Compose-filen nedan hämtar den därifrån, så du behöver varken klona repot eller bygga något.
+Imagen ligger på Docker Hub som `docker.io/pissmyran/politiker`. Compose-filen nedan hämtar den därifrån, så du behöver varken klona repot eller bygga något.
 
 1. **Installera Docker.** På Windows och Mac: [Docker Desktop](https://www.docker.com/products/docker-desktop/). På Linux: paketet `docker.io` (Debian/Ubuntu) eller motsvarande. Podman fungerar också.
 2. **Skapa en mapp** och en fil i den som heter `docker-compose.yml`. Klistra in innehållet nedan.
@@ -18,7 +18,7 @@ Imagen ligger på Docker Hub som `docker.io/driftaegis/politiker`. Compose-filen
 ```yaml
 services:
   politiker:
-    image: docker.io/driftaegis/politiker:0
+    image: docker.io/pissmyran/politiker:0
     restart: unless-stopped
     ports:
       - "8787:8787"
@@ -78,7 +78,7 @@ Vill du inte ha värden som lösenord i compose-filen lägger du dem som `NAMN=v
   - bilagor,
   - den automatiskt skapade nyckeln.
 - **Säkerhetskopiera:** `docker compose stop`, kopiera volymen och kör `docker compose start`. Följ med `/data/mail-cred-key`, annars går användarnas sparade e-postuppgifter inte att läsa.
-- **Uppdatera:** `docker compose pull && docker compose up -d`. Databasmigreringar körs automatiskt vid start.
+- **Uppdatera:** `docker compose pull && docker compose up -d`. Databasmigreringar körs automatiskt vid start. Imagen i `docker-compose.yml` är låst med en digest (`@sha256:…`), så `pull` hämtar bara just den versionen. För att uppgradera, byt digesten mot den som visas av `docker pull docker.io/pissmyran/politiker:0 && docker image inspect --format '{{index .RepoDigests 0}}' docker.io/pissmyran/politiker:0` (med Podman: byt `docker` mot `podman`), eller ta bort `@sha256:…` för att följa taggen.
 - **Versioner:** taggarna följer semver. Projektet är i version 0, så `0` följer alla uppdateringar. Vill du bara ha rättningar väljer du `0.11`, och för en exakt version `0.11.0`.
 
 ## HTTPS
@@ -96,11 +96,14 @@ Containern talar vanlig HTTP på port 8787. Lägg den bakom en omvänd proxy med
   - Inloggningsförsök begränsas i en serialiserad Durable Object.
   - Användarnas e-postuppgifter och brevinnehåll krypteras med AES-GCM.
   - Ändrande anrop kräver same-origin, och svaren har strikt CSP.
-- **Imagen** bygger på `node:24-trixie-slim` (Node LTS på Debian stable), kör som användaren `node` och har en healthcheck. Den innehåller bara källkod med platshållare; dina värden fylls i när containern startar.
+- **Imagen** bygger på den officiella `node`-imagen, varianten `trixie-slim` (Debian 13, stable). Den exakta Node-versionen anges i `Dockerfile` och sköts av Renovate, så en redan publicerad image kan ligga på en äldre version (se Changelog), kör som användaren `node` och har en healthcheck. Den innehåller bara källkod med platshållare; dina värden fylls i när containern startar.
 - **Begränsningar:** `wrangler dev` är en utvecklingsserver som kör en process på en maskin. Det räcker för en grupp eller förening, men ger inte Cloudflares skalning. Kontaktkatalogen med politiker ingår inte, utan fylls av administratören eller användarna.
 - **Felsökning:** `docker compose logs -f`. Administratören ser utskick, konton och statistik i adminvyn.
 
 ## Changelog
+
+**0.12.3**
+- Imagen körs på `node:24-trixie-slim`: Node 24 på Debian 13 (stable). Kontaktskraparens image bygger på `ubuntu:latest` med Playwright från `requirements.txt`.
 
 **0.12.2**
 - `tools/render.mjs` skriver varje ifylld fil i en loop tills alla byte är skrivna, så att en kort skrivning inte kan lämna en avkortad fil.
