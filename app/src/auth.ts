@@ -23,6 +23,7 @@ import { loginDiagnosticEvent } from "./login-diagnostic";
 const SESSION_TTL_SECONDS = 60 * 60 * 24 * 30; // 30 dagar
 const RESET_TTL_MS = 30 * 60 * 1000; // 30 min
 const TOTP_SETUP_TTL_SECONDS = 10 * 60;
+const SESSION_BINDING_PREFIX = "sessionbind:";
 
 // Resend kräver att avsändaren ligger på en verifierad domän.
 // Return-Path och dess DNS-poster hanteras separat i Resend.
@@ -64,6 +65,9 @@ async function credentialVersion(account: Record<string, unknown>): Promise<stri
       String(account.password_salt ?? ""),
       String(account.totp_enabled ?? 0),
       String(account.totp_secret ?? ""),
+      // Incremented on every disable/enable, so a session verified before a
+      // disable cannot become valid again when the account is re-enabled.
+      String(account.security_version ?? 0),
     ].join("|"),
   );
 }
@@ -81,7 +85,14 @@ export async function writeSession(
     credentialVersion: await credentialVersion(account),
     authenticatedAt,
   };
-  await env.SESSIONS.put(`session:${sessionToken}`, JSON.stringify(envelope), {
+  // `session:<token>` keeps the old format (the account id only), so an older
+  // Worker version serving requests during a rollout still recognises the
+  // session. The binding is stored separately and written first, so a visible
+  // session always has its binding.
+  await env.SESSIONS.put(`${SESSION_BINDING_PREFIX}${sessionToken}`, JSON.stringify(envelope), {
+    expirationTtl: SESSION_TTL_SECONDS,
+  });
+  await env.SESSIONS.put(`session:${sessionToken}`, envelope.accountId, {
     expirationTtl: SESSION_TTL_SECONDS,
   });
 }
@@ -91,18 +102,22 @@ export async function getSessionContext(
   sessionToken: string | null,
 ): Promise<SessionContext | null> {
   if (!sessionToken) return null;
-  const raw = await env.SESSIONS.get(`session:${sessionToken}`);
+  const accountId = await env.SESSIONS.get(`session:${sessionToken}`);
+  if (!accountId) return null;
+  const raw = await env.SESSIONS.get(`${SESSION_BINDING_PREFIX}${sessionToken}`);
+  // Older sessions have no binding to the current credential version and
+  // cannot be verified. The security upgrade deliberately signs them out once
+  // instead of keeping them alive.
   if (!raw) return null;
 
   let session: SessionEnvelope;
   try {
     session = JSON.parse(raw) as SessionEnvelope;
   } catch {
-    // Äldre sessioner lagrade bara accountId som klartext och kan därför inte
-    // bindas till aktuell credential-version. Säkerhetsuppgraderingen gör en
-    // avsiktlig engångsutloggning i stället för att låta sådana sessioner leva.
     return null;
   }
+  // Logout deletes `session:<token>`; the binding alone is never enough.
+  if (session.accountId !== accountId) return null;
   if (!session.accountId || !session.credentialVersion || !Number.isFinite(session.authenticatedAt))
     return null;
 
@@ -383,7 +398,9 @@ export async function setAccountDisabled(
   targetAccountId: string,
   disabled: boolean,
 ): Promise<void> {
-  await env.DB.prepare("UPDATE accounts SET disabled = ? WHERE id = ?")
+  await env.DB.prepare(
+    "UPDATE accounts SET disabled = ?, security_version = security_version + 1 WHERE id = ?",
+  )
     .bind(disabled ? 1 : 0, targetAccountId)
     .run();
 }

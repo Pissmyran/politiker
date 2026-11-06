@@ -22,7 +22,7 @@ registerHooks({
 });
 
 const { default: app } = await import("../src/secure-index.ts");
-const { getSessionContext } = await import("../src/auth.ts");
+const { getSessionContext, setAccountDisabled } = await import("../src/auth.ts");
 const { hashPassword } = await import("../../shared/crypto.ts");
 
 async function fixture() {
@@ -249,4 +249,44 @@ test("valid factors create and refresh sessions, while incorrect factors do not"
   assert.ok(await getSessionContext(f.env, token));
   f.account.disabled = 1;
   assert.equal(await getSessionContext(f.env, token), null);
+});
+
+test("a session verified before a disable stays invalid after re-enabling", async () => {
+  const f = await fixture();
+  const token = await f.login();
+  assert.ok(await getSessionContext(f.env, token));
+  f.account.disabled = 1;
+  f.account.security_version = 1;
+  assert.equal(await getSessionContext(f.env, token), null);
+  f.account.disabled = 0;
+  f.account.security_version = 2;
+  assert.equal(await getSessionContext(f.env, token), null);
+});
+
+test("disabling or enabling an account bumps its security version", async () => {
+  const statements: string[] = [];
+  const env = {
+    DB: {
+      prepare(sql: string) {
+        statements.push(sql);
+        return { bind: () => ({ run: async () => ({}) }) };
+      },
+    },
+  } as unknown as import("../src/db.ts").Env;
+  await setAccountDisabled(env, "account-a", true);
+  await setAccountDisabled(env, "account-a", false);
+  assert.equal(statements.length, 2);
+  for (const sql of statements) assert.match(sql, /security_version = security_version \+ 1/);
+});
+
+test("sessions keep the account id under the legacy key and need both keys", async () => {
+  const f = await fixture();
+  const token = await f.login();
+  assert.equal(f.values.get(`session:${token}`), "account-a");
+  assert.ok(await getSessionContext(f.env, token));
+  f.values.delete(`session:${token}`);
+  assert.equal(await getSessionContext(f.env, token), null);
+  const other = await f.login();
+  f.values.delete(`sessionbind:${other}`);
+  assert.equal(await getSessionContext(f.env, other), null);
 });

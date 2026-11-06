@@ -158,7 +158,7 @@ async function upgradeOAuthSession(req: Request, env: Env, response: Response): 
   const token = (response.headers.get("Set-Cookie") ?? "").match(/(?:^|;\s*)session=([^;]+)/)?.[1];
   if (!token) return;
   const raw = await env.SESSIONS.get(`session:${token}`);
-  if (!raw || raw.startsWith("{")) return;
+  if (!raw || (await getSessionContext(env, token))) return;
   try {
     const account = await getAccountById(env.DB, raw);
     if (!account) throw new Error("Konto saknas eller är inaktiverat");
