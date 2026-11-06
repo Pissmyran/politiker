@@ -42,12 +42,12 @@ The code contains no account details. Wherever a value of your own is needed, su
 
 ## Running with Docker
 
-PolitikerKontakt is available as a ready-made image on Docker Hub, `docker.io/driftaegis/politiker`. You do not need to build anything: `docker-compose.yml` names the image like this, and `docker compose up -d` pulls it.
+PolitikerKontakt is available as a ready-made image on Docker Hub, `docker.io/pissmyran/politiker`. You do not need to build anything: `docker-compose.yml` names the image like this, and `docker compose up -d` pulls it.
 
 In `docker-compose.yml`:
 
 ```yaml
-    image: docker.io/driftaegis/politiker:0
+    image: docker.io/pissmyran/politiker:0
 ```
 
 The tag `0` gives every update within version 0; `X.Y` gives only fixes and `X.Y.Z` exactly one version. Every setting is described on the [Docker](docker.md) page, and the changes are listed in [CHANGELOG.md](../../CHANGELOG.md). To build the image yourself from source: `docker build -t politiker .` in the repo root.
