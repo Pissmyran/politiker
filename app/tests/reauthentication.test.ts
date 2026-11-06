@@ -24,7 +24,7 @@ test("reauthentication verifies account factors before refreshing the same sessi
     indexSource,
     /reauthenticateAccount\(c\.env, c\.accountId, password, totpCode\)/,
   );
-  assertSourceMatch(indexSource, /writeSession\(c\.env, c\.sessionToken, c\.accountId\)/);
+  assertSourceMatch(indexSource, /writeSession\(c\.env, c\.sessionToken, account\)/);
 });
 
 test("fresh-auth gate returns a machine-readable challenge instead of demanding logout", () => {

@@ -8,7 +8,7 @@ The image starts empty: there are no accounts and no contact directory. You do n
 
 ## Getting started
 
-The image is on Docker Hub as `docker.io/driftaegis/politiker`. The compose file below pulls it from there, so you neither clone the repo nor build anything.
+The image is on Docker Hub as `docker.io/pissmyran/politiker`. The compose file below pulls it from there, so you neither clone the repo nor build anything.
 
 1. **Install Docker.** On Windows and Mac: [Docker Desktop](https://www.docker.com/products/docker-desktop/). On Linux: the `docker.io` package (Debian/Ubuntu) or equivalent. Podman works too.
 2. **Create a folder** with a file in it named `docker-compose.yml`. Paste the content below.
@@ -20,7 +20,7 @@ The image is on Docker Hub as `docker.io/driftaegis/politiker`. The compose file
 ```yaml
 services:
   politiker:
-    image: docker.io/driftaegis/politiker:0
+    image: docker.io/pissmyran/politiker:0
     restart: unless-stopped
     ports:
       - "8787:8787"
@@ -80,7 +80,7 @@ If you do not want values such as passwords in the compose file, put them as `NA
   - attachments,
   - the automatically created key.
 - **Back up:** `docker compose stop`, copy the volume and run `docker compose start`. Include `/data/mail-cred-key`, or the users' saved email credentials cannot be read.
-- **Update:** `docker compose pull && docker compose up -d`. Database migrations run automatically at start.
+- **Update:** `docker compose pull && docker compose up -d`. Database migrations run automatically at start. The image in `docker-compose.yml` is pinned with a digest (`@sha256:…`), so `pull` only fetches that exact version. To upgrade, replace the digest with the one shown by `docker pull docker.io/pissmyran/politiker:0 && docker image inspect --format '{{index .RepoDigests 0}}' docker.io/pissmyran/politiker:0` (with Podman, use `podman` instead of `docker`), or remove `@sha256:…` to follow the tag.
 - **Versions:** the tags follow semver. The project is at version 0, so `0` follows every update. For fixes only choose `0.11`, and for an exact version `0.11.0`.
 
 ## HTTPS
@@ -98,11 +98,14 @@ The container speaks plain HTTP on port 8787. Put it behind a reverse proxy with
   - Sign-in attempts are limited in a serialized Durable Object.
   - The users' email credentials and letter content are encrypted with AES-GCM.
   - Changing requests require same-origin, and responses have a strict CSP.
-- **The image** is based on `node:24-trixie-slim` (Node LTS on Debian stable), runs as the `node` user and has a healthcheck. It only contains source code with placeholders; your values are filled in when the container starts.
+- **The image** is based on the official `node` image, `trixie-slim` variant (Debian 13, stable). The exact Node version is set in the `Dockerfile` and maintained by Renovate, so an already published image may be on an older version (see the Changelog), runs as the `node` user and has a healthcheck. It only contains source code with placeholders; your values are filled in when the container starts.
 - **Limits:** `wrangler dev` is a development server that runs one process on one machine. That is enough for a group or association, but gives no Cloudflare scaling. The contact directory of politicians is not included; the administrator or the users fill it.
 - **Troubleshooting:** `docker compose logs -f`. The administrator sees sends, accounts and statistics in the admin view.
 
 ## Changelog
+
+**0.12.3**
+- The image runs on `node:24-trixie-slim`: Node 24 on Debian 13 (stable). The contact scraper image is based on `ubuntu:latest` with Playwright from `requirements.txt`.
 
 **0.12.2**
 - `tools/render.mjs` writes each filled-in file in a loop until every byte is written, so a short write cannot leave a truncated file.

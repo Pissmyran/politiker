@@ -38,7 +38,7 @@ The scripts that use D1's HTTP API read the variables from the environment. `san
 
 ## The quarterly run
 
-`kontakter/scraper/quarterly_refresh.sh` runs every tool in the right order and last `sanitize_d1.py --apply`. It is meant to be scheduled every three months. If the scheduler uses a file with the variables, it sets `POLITIKER_ENV_FILE` to that file; the script stops if `CONTACT_SOURCES_DIR` is missing.
+`kontakter/scraper/quarterly_refresh.sh` runs every tool except `verify/verify_emails.py` in the right order and last `sanitize_d1.py --apply`. It is meant to be scheduled every three months. If the scheduler uses a file with the variables, it sets `POLITIKER_ENV_FILE` to that file; the script stops if `CONTACT_SOURCES_DIR` is missing.
 
 ## Tests
 

@@ -181,8 +181,8 @@ const AUTHED_ROUTES: RouteDef[] = [
       if (!c.sessionToken)
         return json({ error: "Återautentisering kräver en vanlig webbsession" }, 403);
       const { password, totpCode } = await c.req.json<{ password?: string; totpCode?: string }>();
-      await reauthenticateAccount(c.env, c.accountId, password, totpCode);
-      await writeSession(c.env, c.sessionToken, c.accountId);
+      const account = await reauthenticateAccount(c.env, c.accountId, password, totpCode);
+      await writeSession(c.env, c.sessionToken, account);
       return json({ ok: true });
     },
   },
