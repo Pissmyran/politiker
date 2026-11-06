@@ -31,7 +31,7 @@ Produktionen driftsätts från en renderad kopia, antingen från din dator eller
 - **Namn:** Docker Hub-namnrymden kommer från repo-variabeln `DOCKERHUB_USERNAME` och repo-namnet från GitHub (`github.event.repository.name`). Inget av dem står i workflowen. Imagen heter `docker.io/<DOCKERHUB_USERNAME>/<repo>`.
 - **Token:** hemligheten `DOCKERHUB_TOKEN` ligger i miljön `release`.
 - **Saknad variabel:** körningen stoppas direkt med ett tydligt fel, innan något byggs eller publiceras. GitHub-releasen finns redan då. Sätt variabeln och kör om workflowen.
-- **Taggar:** den exakta versionen pushas först. De rörliga taggarna (`minor`, `major`, `latest`) flyttas bara av den nyaste stabila releasen de står för; en äldre version eller en prerelease flyttar ingen. En misslyckad push av en rörlig tagg stoppar inte de andra men gör jobbet rött, och en omkörning pushar alla taggar igen.
+- **Taggar:** den exakta versionen pushas först. De rörliga taggarna (`minor`, `major`, `latest`) flyttas bara av den nyaste stabila releasen de står för; en äldre version eller en prerelease flyttar ingen. En misslyckad push av en rörlig tagg stoppar inte de andra men gör jobbet rött, och en omkörning pushar alla taggar igen. Om listan över releasetaggar inte kan hämtas stoppas jobbet utan att någon rörlig tagg ändras.
 - **Samtidighet:** varje tagg har en egen körning, och ingen körning avbryts.
 
 ## Migreringar

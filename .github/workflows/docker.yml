@@ -56,11 +56,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           printf '%s' "$DOCKERHUB_TOKEN" | docker login docker.io -u "$DOCKERHUB_USERNAME" --password-stdin
-          # Prints the newest stable release (x.y.z) among the repository's v*.*.* tags plus
-          # this version, limited to those matching the regex in $1.
+          # Prints the newest stable release (x.y.z) among the repository's tags ($tags)
+          # plus this version, limited to those matching the regex in $1.
           newest() {
-            { gh api --paginate "repos/$GITHUB_REPOSITORY/git/matching-refs/tags/v" --jq '.[].ref | ltrimstr("refs/tags/v")'
-              echo "$VERSION"; } | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' | grep -E "$1" | sort -V | tail -n1
+            { printf '%s\n' "$tags"; echo "$VERSION"; } | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' | grep -E "$1" | sort -V | tail -n1
           }
           # True when this release is the newest one the moving tag $1 can stand for.
           # A prerelease never moves a moving tag.
@@ -73,6 +72,10 @@ jobs:
           minor=${VERSION%.*}
           # The exact version goes first; the moving tags only follow once it exists.
           docker push "$IMAGE:$VERSION"
+          # A failed lookup must stop the job rather than look like "no other releases",
+          # otherwise an old release could move the moving tags backwards.
+          tags=$(gh api --paginate "repos/$GITHUB_REPOSITORY/git/matching-refs/tags/v" --jq '.[].ref | ltrimstr("refs/tags/v")') ||
+            { echo "::error::Could not list the repository's release tags; no moving tag was changed."; exit 1; }
           # Try every moving tag even if one push fails, then fail the job. A re-run
           # only has to repeat what is missing, and the failure stays visible.
           failed=0

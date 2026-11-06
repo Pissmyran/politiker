@@ -31,7 +31,7 @@ Production is deployed from a rendered copy, either from your computer or with W
 - **Names:** the Docker Hub namespace comes from the repository variable `DOCKERHUB_USERNAME` and the repository name from GitHub (`github.event.repository.name`). Neither is written in the workflow. The image is `docker.io/<DOCKERHUB_USERNAME>/<repo>`.
 - **Token:** the secret `DOCKERHUB_TOKEN` lives in the `release` environment.
 - **Missing variable:** the run stops at once with a clear error, before anything is built or published. The GitHub release already exists by then. Set the variable and re-run the workflow.
-- **Tags:** the exact version is pushed first. The moving tags (`minor`, `major`, `latest`) are only moved by the newest stable release they stand for; an older version or a prerelease moves none. A failed push of one moving tag does not stop the others but fails the job, and a re-run pushes all tags again.
+- **Tags:** the exact version is pushed first. The moving tags (`minor`, `major`, `latest`) are only moved by the newest stable release they stand for; an older version or a prerelease moves none. A failed push of one moving tag does not stop the others but fails the job, and a re-run pushes all tags again. If the list of release tags cannot be fetched, the job stops without changing any moving tag.
 - **Concurrency:** each tag has its own run, and no run is cancelled.
 
 ## Migrations
