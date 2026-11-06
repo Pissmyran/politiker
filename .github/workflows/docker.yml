@@ -26,8 +26,10 @@ jobs:
     # får använda.
     environment: release
     env:
-      IMAGE: docker.io/${{ vars.DOCKERHUB_USERNAME }}/politiker
-      DOCKERHUB_USERNAME: ${{ vars.DOCKERHUB_USERNAME }}
+      # The image namespace is fixed, so a wrong repository variable can never
+      # send a release to another namespace.
+      IMAGE: docker.io/pissmyran/politiker
+      DOCKERHUB_USERNAME: ${{ vars.DOCKERHUB_USERNAME || 'pissmyran' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -64,6 +66,6 @@ jobs:
             curl -sf -X POST https://hub.docker.com/v2/users/login -H 'Content-Type: application/json' -d @- | jq -r .token)
           status=$(jq -n --rawfile d docker/README.md '{full_description: $d}' |
             curl -s -o /dev/null -w '%{http_code}' -X PATCH \
-              "https://hub.docker.com/v2/namespaces/$DOCKERHUB_USERNAME/repositories/politiker" \
+              "https://hub.docker.com/v2/namespaces/pissmyran/repositories/politiker" \
               -H "Authorization: Bearer $jwt" -H 'Content-Type: application/json' -d @-)
           [ "$status" = 200 ] || echo "::warning::Docker Hub-sidan uppdaterades inte (HTTP $status). Token behöver Read, Write och Delete."
