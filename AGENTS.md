@@ -42,6 +42,7 @@ cd kontakter && pip install -r requirements-dev.txt requests pypdf dnspython && 
 - **Egen drift:** `TURNSTILE_SECRET=off` stänger av bot-kontrollen, och utan systemmejl verifieras konton direkt. Det är avsiktliga lägen, inte säkerhetsfel.
 - **`kontakter/`** innehåller verktygen för kontaktdata. Deras utdata hamnar aldrig i repot.
 - **Dokumentationen** publiceras också under `/docs` av appens egen Worker: Workers Builds kör `node tools/render.mjs - build && (sh tools/docs-cloudflare.sh build/app/public || echo "docs skipped")`, som lägger till en `/docs/*`-regel i `_headers` vars CSP tillåter sajtens inline-skript med hash.
+- **Docker-bild:** publiceras som `docker.io/pissmyran/politiker` av `.github/workflows/docker.yml`. `docker-compose.yml` låser den med tagg och digest; håll taggen, digesten, `docker/README.md` och `README.md` i synk.
 - **Release:** versionen finns i `version.txt`.
 - **Extra noggrant:** inloggning och OAuth, utskickskön, krypterade uppgifter, kontaktverktygen och migreringar.
 
