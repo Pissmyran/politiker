@@ -13,11 +13,11 @@ on:
 permissions:
   contents: read
 
-# One group for every release: each run writes the moving tags (latest, major,
-# minor), so runs must not overlap. A run that is already building is never
-# cancelled.
+# One run per tag, never cancelled, so every release is published. Moving tags
+# (latest, major, minor) are only moved by the newest release they stand for,
+# which keeps overlapping runs from moving them backwards.
 concurrency:
-  group: docker-publish
+  group: docker-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
@@ -53,8 +53,22 @@ jobs:
       - name: Publicera
         env:
           DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           printf '%s' "$DOCKERHUB_TOKEN" | docker login docker.io -u "$DOCKERHUB_USERNAME" --password-stdin
+          # Prints the newest stable release (x.y.z) among the repository's v*.*.* tags plus
+          # this version, limited to those matching the regex in $1.
+          newest() {
+            { gh api --paginate "repos/$GITHUB_REPOSITORY/git/matching-refs/tags/v" --jq '.[].ref | ltrimstr("refs/tags/v")'
+              echo "$VERSION"; } | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' | grep -E "$1" | sort -V | tail -n1
+          }
+          # True when this release is the newest one the moving tag $1 can stand for.
+          # A prerelease never moves a moving tag.
+          may_move() {
+            case $VERSION in *-*) return 1 ;; esac
+            if [ "$1" = latest ]; then re='.'; else re="^${1//./\\.}\\."; fi
+            [ "$(newest "$re")" = "$VERSION" ]
+          }
           major=${VERSION%%.*}
           minor=${VERSION%.*}
           # The exact version goes first; the moving tags only follow once it exists.
@@ -63,6 +77,10 @@ jobs:
           # only has to repeat what is missing, and the failure stays visible.
           failed=0
           for tag in "$minor" "$major" latest; do
+            if ! may_move "$tag"; then
+              echo "Not moving $tag: $VERSION is not the newest stable release it stands for."
+              continue
+            fi
             docker tag "$IMAGE:$VERSION" "$IMAGE:$tag"
             docker push "$IMAGE:$tag" || failed=1
           done
