@@ -53,13 +53,17 @@ jobs:
           # Every check does a fresh lookup of the release tags. A failed lookup fails the job
           # (moving tags pushed before that point stay as they are), so an API error can never
           # look like "no other releases". A prerelease never moves a moving tag, and neither
-          # does a version that has no v-tag yet (for example a manual run on an unreleased one).
+          # does a version that has no v-tag yet (for example a manual run on an unreleased one) or whose tag points at another commit.
           may_move() {
-            local re tags top
+            local re tags top sha
             case $VERSION in *-*) return 1 ;; esac
             tags=$(gh api --paginate "repos/$GITHUB_REPOSITORY/git/matching-refs/tags/v" --jq '.[].ref | ltrimstr("refs/tags/v")') ||
               { echo "::error::Could not list the repository's release tags; moving tags pushed before this point were left as they are."; exit 1; }
             printf '%s\n' "$tags" | grep -qxF "$VERSION" || return 1
+            # The release tag must also point at the commit this run was started for.
+            sha=$(gh api "repos/$GITHUB_REPOSITORY/commits/v$VERSION" --jq .sha) ||
+              { echo "::error::Could not resolve the release tag v$VERSION; moving tags pushed before this point were left as they are."; exit 1; }
+            [ "$sha" = "$GITHUB_SHA" ] || return 1
             if [ "$1" = latest ]; then re='.'; else re="^${1//./\\.}\\."; fi
             top=$(printf '%s\n' "$tags" | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' | grep -E "$re" | sort -V | tail -n1)
             [ "$top" = "$VERSION" ]
