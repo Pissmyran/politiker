@@ -13,8 +13,11 @@ on:
 permissions:
   contents: read
 
+# One group for every release: each run writes the moving tags (latest, major,
+# minor), so runs must not overlap. A run that is already building is never
+# cancelled.
 concurrency:
-  group: docker-${{ github.ref }}
+  group: docker-publish
   cancel-in-progress: false
 
 jobs:
