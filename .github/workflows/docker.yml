@@ -13,13 +13,6 @@ on:
 permissions:
   contents: read
 
-# One group for every release: each run writes the moving tags (latest, major,
-# minor), so runs must not overlap. A run that is already building is never
-# cancelled.
-concurrency:
-  group: docker-publish
-  cancel-in-progress: false
-
 jobs:
   publish:
     name: Bygg och publicera
@@ -29,14 +22,16 @@ jobs:
     # får använda.
     environment: release
     env:
-      # The image namespace is fixed, so a wrong repository variable can never
-      # send a release to another namespace.
-      IMAGE: docker.io/pissmyran/politiker
-      DOCKERHUB_USERNAME: ${{ vars.DOCKERHUB_USERNAME || 'pissmyran' }}
+      REPOSITORY: ${{ github.event.repository.name }}
+      DOCKERHUB_USERNAME: ${{ vars.DOCKERHUB_USERNAME }}
+      IMAGE: docker.io/${{ vars.DOCKERHUB_USERNAME }}/${{ github.event.repository.name }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - name: Check variables
+        run: |
+          [ -n "$DOCKERHUB_USERNAME" ] || { echo "::error::The repository variable DOCKERHUB_USERNAME is not set."; exit 1; }
       - name: Version
         run: |
           version=$(tr -d "[:space:]" < version.txt)
@@ -51,8 +46,28 @@ jobs:
       - name: Publicera
         env:
           DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           printf '%s' "$DOCKERHUB_TOKEN" | docker login docker.io -u "$DOCKERHUB_USERNAME" --password-stdin
+          # True when this release is the newest one the moving tag $1 can stand for.
+          # Every check does a fresh lookup of the release tags. A failed lookup fails the job
+          # (moving tags pushed before that point stay as they are), so an API error can never
+          # look like "no other releases". A prerelease never moves a moving tag, and neither
+          # does a version that has no v-tag yet (for example a manual run on an unreleased one) or whose tag points at another commit.
+          may_move() {
+            local re tags top sha
+            case $VERSION in *-*) return 1 ;; esac
+            tags=$(gh api --paginate "repos/$GITHUB_REPOSITORY/git/matching-refs/tags/v" --jq '.[].ref | ltrimstr("refs/tags/v")') ||
+              { echo "::error::Could not list the repository's release tags; moving tags pushed before this point were left as they are."; exit 1; }
+            printf '%s\n' "$tags" | grep -qxF "$VERSION" || return 1
+            # The release tag must also point at the commit this run was started for.
+            sha=$(gh api "repos/$GITHUB_REPOSITORY/commits/v$VERSION" --jq .sha) ||
+              { echo "::error::Could not resolve the release tag v$VERSION; moving tags pushed before this point were left as they are."; exit 1; }
+            [ "$sha" = "$GITHUB_SHA" ] || return 1
+            if [ "$1" = latest ]; then re='.'; else re="^${1//./\\.}\\."; fi
+            top=$(printf '%s\n' "$tags" | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' | grep -E "$re" | sort -V | tail -n1)
+            [ "$top" = "$VERSION" ]
+          }
           major=${VERSION%%.*}
           minor=${VERSION%.*}
           # The exact version goes first; the moving tags only follow once it exists.
@@ -61,8 +76,18 @@ jobs:
           # only has to repeat what is missing, and the failure stays visible.
           failed=0
           for tag in "$minor" "$major" latest; do
+            if ! may_move "$tag"; then
+              echo "Not moving $tag: $VERSION is not the newest stable release it stands for."
+              continue
+            fi
             docker tag "$IMAGE:$VERSION" "$IMAGE:$tag"
-            docker push "$IMAGE:$tag" || failed=1
+            docker push "$IMAGE:$tag" || { failed=1; continue; }
+            # A newer release may have appeared while this tag was pushed. Fail loudly then,
+            # so the newer release's workflow can be re-run to put its image back on the tag.
+            if ! may_move "$tag"; then
+              echo "::error::A newer release appeared while $tag was pushed; re-run that release's workflow."
+              failed=1
+            fi
           done
           docker logout docker.io
           [ "$failed" = 0 ]
@@ -75,6 +100,6 @@ jobs:
             curl -sf -X POST https://hub.docker.com/v2/users/login -H 'Content-Type: application/json' -d @- | jq -r .token)
           status=$(jq -n --rawfile d docker/README.md '{full_description: $d}' |
             curl -s -o /dev/null -w '%{http_code}' -X PATCH \
-              "https://hub.docker.com/v2/namespaces/pissmyran/repositories/politiker" \
+              "https://hub.docker.com/v2/namespaces/$DOCKERHUB_USERNAME/repositories/$REPOSITORY" \
               -H "Authorization: Bearer $jwt" -H 'Content-Type: application/json' -d @-)
           [ "$status" = 200 ] || echo "::warning::Docker Hub-sidan uppdaterades inte (HTTP $status). Token behöver Read, Write och Delete."
