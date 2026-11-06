@@ -61,6 +61,8 @@ through `inheritance: true`. Local review guidance also covers attachments and
 document imports, browser behavior and accessibility, app tests, queue recovery,
 migrations, lockfiles and the English documentation mirror. See [operations](operations.md#repository-review-configuration).
 
+**Publishing the Docker image:** `.github/workflows/docker.yml` takes the Docker Hub namespace from the repository variable `DOCKERHUB_USERNAME` and the token from the secret `DOCKERHUB_TOKEN` (the token lives in the `release` environment). If the variable is not set, the run stops at once with a clear error, before anything is built or published. The GitHub release already exists by then: set the variable and re-run the workflow, which pushes all tags again.
+
 ## License
 
 MIT, see [LICENSE](../../LICENSE).

@@ -61,6 +61,8 @@ via `inheritance: true`. De lokala granskningsråden omfattar även bilagor och
 dokumentimport, webbläsarbeteende och tillgänglighet, apptester, återhämtning av kön,
 migreringar, låsfiler och den engelska dokumentationen. Se [drift](docs/operations.md#konfiguration-av-kodgranskning).
 
+**Publicera Docker-imagen:** `.github/workflows/docker.yml` hämtar Docker Hub-namnrymden från repo-variabeln `DOCKERHUB_USERNAME` och token från hemligheten `DOCKERHUB_TOKEN` (token ligger i miljön `release`). Saknas variabeln stoppas körningen direkt med ett tydligt fel, innan något byggs eller publiceras. GitHub-releasen finns redan då: sätt variabeln och kör om workflowen, som pushar alla taggar igen.
+
 ## Licens
 
 MIT, se [LICENSE](LICENSE).
