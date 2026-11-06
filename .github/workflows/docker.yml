@@ -29,14 +29,16 @@ jobs:
     # får använda.
     environment: release
     env:
-      # The image namespace is fixed, so a wrong repository variable can never
-      # send a release to another namespace.
-      IMAGE: docker.io/pissmyran/politiker
-      DOCKERHUB_USERNAME: ${{ vars.DOCKERHUB_USERNAME || 'pissmyran' }}
+      REPOSITORY: ${{ github.event.repository.name }}
+      DOCKERHUB_USERNAME: ${{ vars.DOCKERHUB_USERNAME }}
+      IMAGE: docker.io/${{ vars.DOCKERHUB_USERNAME }}/${{ github.event.repository.name }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - name: Check variables
+        run: |
+          [ -n "$DOCKERHUB_USERNAME" ] || { echo "::error::The repository variable DOCKERHUB_USERNAME is not set."; exit 1; }
       - name: Version
         run: |
           version=$(tr -d "[:space:]" < version.txt)
@@ -75,6 +77,6 @@ jobs:
             curl -sf -X POST https://hub.docker.com/v2/users/login -H 'Content-Type: application/json' -d @- | jq -r .token)
           status=$(jq -n --rawfile d docker/README.md '{full_description: $d}' |
             curl -s -o /dev/null -w '%{http_code}' -X PATCH \
-              "https://hub.docker.com/v2/namespaces/pissmyran/repositories/politiker" \
+              "https://hub.docker.com/v2/namespaces/$DOCKERHUB_USERNAME/repositories/$REPOSITORY" \
               -H "Authorization: Bearer $jwt" -H 'Content-Type: application/json' -d @-)
           [ "$status" = 200 ] || echo "::warning::Docker Hub-sidan uppdaterades inte (HTTP $status). Token behöver Read, Write och Delete."
