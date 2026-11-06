@@ -13,8 +13,11 @@ on:
 permissions:
   contents: read
 
+# One group for every release: each run writes the moving tags (latest, major,
+# minor), so runs must not overlap. A run that is already building is never
+# cancelled.
 concurrency:
-  group: docker-${{ github.ref }}
+  group: docker-publish
   cancel-in-progress: false
 
 jobs:
@@ -52,11 +55,17 @@ jobs:
           printf '%s' "$DOCKERHUB_TOKEN" | docker login docker.io -u "$DOCKERHUB_USERNAME" --password-stdin
           major=${VERSION%%.*}
           minor=${VERSION%.*}
-          for tag in "$VERSION" "$minor" "$major" latest; do
+          # The exact version goes first; the moving tags only follow once it exists.
+          docker push "$IMAGE:$VERSION"
+          # Try every moving tag even if one push fails, then fail the job. A re-run
+          # only has to repeat what is missing, and the failure stays visible.
+          failed=0
+          for tag in "$minor" "$major" latest; do
             docker tag "$IMAGE:$VERSION" "$IMAGE:$tag"
-            docker push "$IMAGE:$tag"
+            docker push "$IMAGE:$tag" || failed=1
           done
           docker logout docker.io
+          [ "$failed" = 0 ]
       - name: Docker Hub-sidan
         env:
           DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
