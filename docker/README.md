@@ -78,7 +78,7 @@ Vill du inte ha värden som lösenord i compose-filen lägger du dem som `NAMN=v
   - bilagor,
   - den automatiskt skapade nyckeln.
 - **Säkerhetskopiera:** `docker compose stop`, kopiera volymen och kör `docker compose start`. Följ med `/data/mail-cred-key`, annars går användarnas sparade e-postuppgifter inte att läsa.
-- **Uppdatera:** `docker compose pull && docker compose up -d`. Databasmigreringar körs automatiskt vid start.
+- **Uppdatera:** `docker compose pull && docker compose up -d`. Databasmigreringar körs automatiskt vid start. Imagen i `docker-compose.yml` är låst med en digest (`@sha256:…`), så `pull` hämtar bara just den versionen. För att uppgradera, byt digesten mot den som visas av `docker pull docker.io/pissmyran/politiker:0 && docker image inspect --format '{{index .RepoDigests 0}}' docker.io/pissmyran/politiker:0` (med Podman: byt `docker` mot `podman`), eller ta bort `@sha256:…` för att följa taggen.
 - **Versioner:** taggarna följer semver. Projektet är i version 0, så `0` följer alla uppdateringar. Vill du bara ha rättningar väljer du `0.11`, och för en exakt version `0.11.0`.
 
 ## HTTPS

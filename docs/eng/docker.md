@@ -80,7 +80,7 @@ If you do not want values such as passwords in the compose file, put them as `NA
   - attachments,
   - the automatically created key.
 - **Back up:** `docker compose stop`, copy the volume and run `docker compose start`. Include `/data/mail-cred-key`, or the users' saved email credentials cannot be read.
-- **Update:** `docker compose pull && docker compose up -d`. Database migrations run automatically at start.
+- **Update:** `docker compose pull && docker compose up -d`. Database migrations run automatically at start. The image in `docker-compose.yml` is pinned with a digest (`@sha256:…`), so `pull` only fetches that exact version. To upgrade, replace the digest with the one shown by `docker pull docker.io/pissmyran/politiker:0 && docker image inspect --format '{{index .RepoDigests 0}}' docker.io/pissmyran/politiker:0` (with Podman, use `podman` instead of `docker`), or remove `@sha256:…` to follow the tag.
 - **Versions:** the tags follow semver. The project is at version 0, so `0` follows every update. For fixes only choose `0.11`, and for an exact version `0.11.0`.
 
 ## HTTPS

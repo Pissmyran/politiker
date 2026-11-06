@@ -63,6 +63,8 @@ via `inheritance: true`. De lokala granskningsråden omfattar även bilagor och
 dokumentimport, webbläsarbeteende och tillgänglighet, apptester, återhämtning av kön,
 migreringar, låsfiler och den engelska dokumentationen. Se [drift](docs/operations.md#konfiguration-av-kodgranskning).
 
+**Publicera Docker-imagen:** `.github/workflows/docker.yml` hämtar Docker Hub-namnrymden från repo-variabeln `DOCKERHUB_USERNAME`, image-namnet från GitHub-repots namn och token från hemligheten `DOCKERHUB_TOKEN` (token ligger i miljön `release`). Saknas variabeln stoppas körningen direkt med ett tydligt fel, innan något byggs eller publiceras. GitHub-releasen finns redan då: sätt variabeln och kör om workflowen, som pushar den exakta versionen och de rörliga taggar den har rätt att flytta. De rörliga taggarna (`minor`, `major`, `latest`) flyttas bara av den nyaste stabila releasen de står för: en prerelease flyttar ingen, och en omkörning av en äldre release flyttar bara de av `minor`- och `major`-taggarna i sin egen serie där den fortfarande är nyast (aldrig `latest`). En version utan `v`-releasetagg på den commit som publiceras flyttar ingen rörlig tagg. Releasetaggarna slås upp på nytt före och efter varje push av en rörlig tagg; misslyckas uppslagningen, eller dyker en nyare release upp under tiden, blir körningen röd, och rörliga taggar som redan pushats ligger kvar, så kontrollera dem innan du åtgärdar. En missad release (en ersatt `Release`-körning) återställs enligt [drift](docs/operations.md).
+
 ## Licens
 
 MIT, se [LICENSE](LICENSE).
