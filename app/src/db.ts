@@ -445,9 +445,7 @@ export async function countSentToday(db: D1Database, accountId: string): Promise
   const d = new Date();
   d.setUTCHours(0, 0, 0, 0);
   const r = await db
-    .prepare(
-      "SELECT COUNT(*) as n FROM send_log WHERE account_id = ? AND sent_at >= ? AND status = 'ok'",
-    )
+    .prepare("SELECT COUNT(*) as n FROM send_usage WHERE account_id = ? AND sent_at >= ?")
     .bind(accountId, d.getTime())
     .first<{ n: number }>();
   return r?.n ?? 0;
@@ -459,9 +457,7 @@ export async function countSentTodayForCredential(
   const d = new Date();
   d.setUTCHours(0, 0, 0, 0);
   const r = await db
-    .prepare(
-      `SELECT COUNT(*) as n FROM send_log sl JOIN send_jobs sj ON sj.id = sl.send_job_id WHERE sj.mail_credential_id = ? AND sl.sent_at >= ? AND sl.status = 'ok'`,
-    )
+    .prepare("SELECT COUNT(*) as n FROM send_usage WHERE mail_credential_id = ? AND sent_at >= ?")
     .bind(mailCredentialId, d.getTime())
     .first<{ n: number }>();
   return r?.n ?? 0;

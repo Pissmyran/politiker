@@ -52,6 +52,14 @@ The introductions are saved encrypted on the send (`send_jobs.intro_text`) when 
 
 The queue and the DLQ only show the transport's state. The send's real status lives in D1.
 
+<!-- coderabbit-ai-generated:v1 -->
+
+<!-- coderabbit-ai-generated-section:v1:4f9df1f192ee1b7b30bfc4f935306cbdd5c15a54e6a949a055b657f37f6028a5 -->
+
+Successful sends today are counted separately from job history, so deleted jobs still count towards account and email connection daily limits. The usage ledger contains no recipient addresses; expired entries are removed when the account next sends, and all entries are removed when the account is deleted.
+
+<!-- /coderabbit-ai-generated:v1 -->
+
 ## The pace
 
 `CredentialRateLimiter` is one Durable Object per email account. Since it handles one request at a time, several concurrent Worker requests can never together send faster than the provider's limit. It must never be replaced by state in KV or in the process.
