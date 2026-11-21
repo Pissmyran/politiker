@@ -65,6 +65,14 @@ The queue and the DLQ only show the transport's state. The send's real status li
 - Admin → an explicit permission check.
 - Sensitive API responses are never cached.
 
+<!-- coderabbit-ai-generated:v1 -->
+
+<!-- coderabbit-ai-generated-section:v1:f807bd8fe1aef08b0f411758214757bf477cb3f074fa2ae65e5c7e8d7627aaf7 -->
+
+- Feedback is limited to 64 KiB per request and 12,000 characters of compact JSON for the client context sent in email.
+
+<!-- /coderabbit-ai-generated:v1 -->
+
 ## Theme and PWA
 
 There are three themes: `legacy` (default), `forest` (with the label from `SITE_FAMILY`) and `blackout`. The choice is saved in `localStorage["<prefix>.theme"]` and the cookie `<prefix>_theme`. The theme picker is at the bottom of the public pages. The theme only changes the look; PolitikerKontakt's own yellow-and-blue profile and status colors exist in every theme.

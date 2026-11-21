@@ -92,7 +92,7 @@ export async function submitFeedback(
 
   let contextJson = "";
   if (input.context) {
-    contextJson = JSON.stringify(input.context, null, 2);
+    contextJson = JSON.stringify(input.context);
     if (contextJson.length > MAX_CONTEXT_CHARS) throw new Error("Klientkontexten är för stor");
   }
 
