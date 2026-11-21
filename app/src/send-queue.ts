@@ -140,10 +140,6 @@ async function processJobMessages(
       queueMsg.ack();
       continue;
     }
-    if (!(await maySendQueuedRecipient(env, sendJobId, m.recipientEmail, m.queuedAt))) {
-      queueMsg.ack();
-      continue;
-    }
     if (!(await waitForSendSlot(env, credentialId, credentialRow.provider))) {
       queueMsg.retry({ delaySeconds: 30 });
       continue;
@@ -170,6 +166,10 @@ async function processJobMessages(
       queueMsg.ack();
       await markJobAborted(env, sendJobId, "Brevets innehåll har raderats");
       aborted = true;
+      continue;
+    }
+    if (!(await maySendQueuedRecipient(env, sendJobId, m.recipientEmail, m.queuedAt))) {
+      queueMsg.ack();
       continue;
     }
     attempted++;

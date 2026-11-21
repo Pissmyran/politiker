@@ -4,13 +4,18 @@ import { test } from "node:test";
 import { assertSourceMatch, assertSourceNoMatch } from "./compact-source.ts";
 
 const sendSource = readFileSync(new URL("../src/send.ts", import.meta.url), "utf8");
+const budgetSource = readFileSync(new URL("../src/send-daily-budget.ts", import.meta.url), "utf8");
 const queueSource = readFileSync(new URL("../src/send-queue.ts", import.meta.url), "utf8");
 const typesSource = readFileSync(new URL("../../shared/types.ts", import.meta.url), "utf8");
 
 test("queued messages carry the enqueue timestamp as an attempt generation", () => {
   assertSourceMatch(typesSource, /queuedAt\?:\s*number/);
   assertSourceMatch(sendSource, /const queuedAt\s*=\s*Date\.now\(\)/);
-  assertSourceMatch(sendSource, /SET status = 'queued', queued_at = \?[\s\S]*?\.bind\(queuedAt,/);
+  assertSourceMatch(
+    sendSource,
+    /claimDailySendBudget\([\s\S]*?recipient\.recipient_email, queuedAt/,
+  );
+  assertSourceMatch(budgetSource, /SET status = 'queued', queued_at = \?/);
   assertSourceMatch(sendSource, /queuedAt,/);
 });
 
