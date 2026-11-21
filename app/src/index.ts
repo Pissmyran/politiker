@@ -12,6 +12,7 @@ import {
   adminResetPassword,
   reauthenticateAccount,
   writeSession,
+  type SessionContext,
   setAccountDisabled,
   deleteOwnAccount,
 } from "./auth";
@@ -91,11 +92,19 @@ function json(data: unknown, status = 200): Response {
     headers: { "Content-Type": "application/json" },
   });
 }
-function getCookie(req: Request, name: string): string | null {
-  const cookie = req.headers.get("Cookie") ?? "";
-  const match = cookie.match(new RegExp(`${name}=([^;]+)`));
-  return match ? match[1] : null;
+export function getCookie(req: Request, name: string): string | null {
+  for (const part of (req.headers.get("Cookie") ?? "").split(";")) {
+    const cookie = part.trimStart();
+    if (cookie.startsWith(`${name}=`) && cookie.length > name.length + 1)
+      return cookie.slice(name.length + 1);
+  }
+  return null;
 }
+
+export type ApprovedSession = {
+  token: string;
+  account: NonNullable<SessionContext["account"]>;
+};
 function setSessionCookie(token: string): string {
   return `session=${token}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=${60 * 60 * 24 * 30}`;
 }
@@ -107,10 +116,15 @@ function requestedRetentionMs(req: Request): number {
 }
 
 export default {
-  async fetch(req: Request, env: Env, execCtx: ExecutionContext): Promise<Response> {
+  async fetch(
+    req: Request,
+    env: Env,
+    execCtx: ExecutionContext,
+    approvedSession?: ApprovedSession,
+  ): Promise<Response> {
     const url = new URL(req.url);
     if (req.method === "GET" && url.pathname === "/") execCtx.waitUntil(recordVisit(env, req));
-    const resp = await handleRequest(req, env, url);
+    const resp = await handleRequest(req, env, url, approvedSession);
     const headers = new Headers(resp.headers);
     headers.delete("Speculation-Rules");
     headers.set("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
@@ -661,7 +675,12 @@ const ADMIN_ROUTES: RouteDef[] = [
   },
 ];
 
-async function handleRequest(req: Request, env: Env, url: URL): Promise<Response> {
+async function handleRequest(
+  req: Request,
+  env: Env,
+  url: URL,
+  approvedSession?: ApprovedSession,
+): Promise<Response> {
   const oauthMatch = url.pathname.match(/^\/api\/oauth\/([a-z]+)\/(start|callback)$/);
   if (oauthMatch) {
     const [, provider, step] = oauthMatch;
@@ -703,7 +722,7 @@ async function handleRequest(req: Request, env: Env, url: URL): Promise<Response
     const [, step] = oauthMailMatch;
     try {
       const sessionToken = getCookie(req, "session"),
-        account = await getAccountFromSession(env, sessionToken);
+        account = approvedSession?.account ?? (await getAccountFromSession(env, sessionToken));
       if (!account) return json({ error: "Inte inloggad" }, 401);
       if (step === "start") {
         if (!env.OAUTH_MICROSOFT_CLIENT_ID)
@@ -742,7 +761,7 @@ async function handleRequest(req: Request, env: Env, url: URL): Promise<Response
     const [, provider, step] = oauthLinkMatch;
     try {
       const sessionToken = getCookie(req, "session"),
-        account = await getAccountFromSession(env, sessionToken);
+        account = approvedSession?.account ?? (await getAccountFromSession(env, sessionToken));
       if (!account) return json({ error: "Inte inloggad" }, 401);
       if (step === "start") {
         const state = randomId();
@@ -777,8 +796,8 @@ async function handleRequest(req: Request, env: Env, url: URL): Promise<Response
 
   if (!url.pathname.startsWith("/api/")) return env.ASSETS.fetch(req);
   try {
-    const sessionToken = getCookie(req, "session");
-    let account = await getAccountFromSession(env, sessionToken);
+    const sessionToken = approvedSession?.token ?? getCookie(req, "session");
+    let account = approvedSession?.account ?? (await getAccountFromSession(env, sessionToken));
     if (!account) {
       const authHeader = req.headers.get("Authorization");
       if (authHeader?.startsWith("Bearer "))
