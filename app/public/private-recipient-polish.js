@@ -1,30 +1,61 @@
 (() => {
   const EMAIL_SOURCE =
     "[A-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?(?:\\.[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?)+";
-  const emailRegex = (flags) => new RegExp(EMAIL_SOURCE, flags);
+  const localChar = /[A-Z0-9.!#$%&'*+/=?^_`{|}~-]/i;
 
-  function cleanImportedName(value) {
-    return String(value || "")
-      .replace(/[\u0000-\u001f\u007f<>]/g, " ")
-      .replace(/^[\s,;|"']+|[\s,;|"']+$/g, "")
-      .replace(/\s+/g, " ")
-      .trim()
-      .slice(0, 160);
+  function* importedEmails(text) {
+    const email = new RegExp(EMAIL_SOURCE, "iy");
+    for (let i = 0; i < text.length;) {
+      if (!localChar.test(text[i])) {
+        i++;
+        continue;
+      }
+      const start = i;
+      // Every suffix of this local-part run would reach the same next character.
+      // If the run cannot start an address, none of its suffixes can either.
+      while (i < text.length && localChar.test(text[i])) i++;
+      email.lastIndex = start;
+      const match = email.exec(text);
+      if (match) {
+        yield { email: match[0].toLowerCase(), start, end: email.lastIndex };
+        i = email.lastIndex;
+      }
+    }
   }
 
-  function importedDisplayNames(line) {
+  function cleanImportedName(value) {
+    const cleaned = String(value || "").replace(/[\u0000-\u001f\u007f<>]/g, " ");
+    let start = 0;
+    let end = cleaned.length;
+    while (start < end && /[\s,;|"']/.test(cleaned[start])) start++;
+    while (end > start && /[\s,;|"']/.test(cleaned[end - 1])) end--;
+    return cleaned.slice(start, end).replace(/\s+/g, " ").trim().slice(0, 160);
+  }
+
+  function importedDisplayNames(line, matches) {
     const names = new Map();
-    const pair = new RegExp(`([^,;\\n<>]+?)\\s*<\\s*(${EMAIL_SOURCE})\\s*>`, "gi");
-    for (const match of line.matchAll(pair)) {
-      const email = String(match[2]).toLowerCase();
-      const name = cleanImportedName(match[1]);
-      if (name) names.set(email, name);
+    const emailsByStart = new Map(matches.map((match) => [match.start, match]));
+    let segmentStart = 0;
+    for (let i = 0; i < line.length; i++) {
+      if (line[i] === "<" && i > segmentStart) {
+        let pos = i + 1;
+        while (pos < line.length && /\s/.test(line[pos])) pos++;
+        const match = emailsByStart.get(pos);
+        if (match) {
+          pos = match.end;
+          while (pos < line.length && /\s/.test(line[pos])) pos++;
+          if (line[pos] === ">") {
+            const name = cleanImportedName(line.slice(segmentStart, i));
+            if (name) names.set(match.email, name);
+          }
+        }
+      }
+      if (",;<>\n".includes(line[i])) segmentStart = i + 1;
     }
     return names;
   }
 
-  function inferImportedName(line, email, emailCount) {
-    const displayNames = importedDisplayNames(line);
+  function inferImportedName(line, email, emailCount, displayNames) {
     if (displayNames.has(email)) return displayNames.get(email);
     if (emailCount !== 1) return "";
 
@@ -57,14 +88,13 @@
     for (const rawLine of String(text || "").split(/\r?\n/)) {
       const line = rawLine.trim();
       if (!line) continue;
-      const matches = [...line.matchAll(emailRegex("gi"))].map((match) =>
-        String(match[0]).toLowerCase(),
-      );
+      const matches = [...importedEmails(line)];
       if (!matches.length) continue;
-      for (const email of matches) {
+      const displayNames = importedDisplayNames(line, matches);
+      for (const { email } of matches) {
         if (seen.has(email)) continue;
         seen.add(email);
-        rows.push({ email, name: inferImportedName(line, email, matches.length) });
+        rows.push({ email, name: inferImportedName(line, email, matches.length, displayNames) });
         if (rows.length > 5000) throw new Error("Högst 5 000 mottagare kan importeras åt gången");
       }
     }
@@ -73,7 +103,7 @@
   }
 
   function containsImportableEmail(value) {
-    return emailRegex("i").test(String(value || ""));
+    return !importedEmails(String(value || "")).next().done;
   }
 
   function polishPrivateRecipients() {
