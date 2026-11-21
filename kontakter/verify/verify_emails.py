@@ -24,6 +24,7 @@ Miljövariabler som krävs (läses ur processmiljön, se d1.py):
   D1_DATABASE_UUID
 """
 
+import ipaddress
 import os
 import random
 import smtplib
@@ -57,17 +58,59 @@ def resolve_mx(domain: str):
         return []
 
 
+class _PinnedSMTP(smtplib.SMTP):
+    def _get_socket(self, host, port, timeout):
+        # Connect to the already validated IP directly, without another DNS lookup.
+        address = ipaddress.ip_address(host)
+        family = socket.AF_INET if address.version == 4 else socket.AF_INET6
+        sock = socket.socket(family, socket.SOCK_STREAM)
+        try:
+            sock.settimeout(timeout)
+            sock.connect((str(address), port))
+            return sock
+        except Exception:
+            sock.close()
+            raise
+
+
+def _public_address(family, sockaddr):
+    try:
+        address = ipaddress.ip_address(sockaddr[0])
+    except ValueError:
+        return None
+    if (family, address.version) not in ((socket.AF_INET, 4), (socket.AF_INET6, 6)):
+        return None
+    if not address.is_global or address.is_reserved or address.is_multicast:
+        return None
+    if address.version == 6 and (
+        address.scope_id is not None
+        or address.ipv4_mapped is not None
+        or address.sixtofour is not None
+        or address.teredo is not None
+    ):
+        return None
+    return address
+
+
 def _connect(mx_hosts: list[tuple[int, str]]) -> smtplib.SMTP | None:
     """Kopplar upp mot första MX-värden som svarar och gör HELO. None om ingen
     gick att nå."""
     for _, host in mx_hosts:
         try:
-            smtp = smtplib.SMTP(timeout=SMTP_TIMEOUT)
-            smtp.connect(host, 25)
-            smtp.helo(HELO_NAME)
-            return smtp
-        except (socket.error, smtplib.SMTPException):
+            addresses = socket.getaddrinfo(host, 25, type=socket.SOCK_STREAM)
+        except socket.error:
             continue
+        for family, _, _, _, sockaddr in addresses:
+            address = _public_address(family, sockaddr)
+            if address is None:
+                continue
+            smtp = _PinnedSMTP(timeout=SMTP_TIMEOUT)
+            try:
+                smtp.connect(str(address), 25)
+                smtp.helo(HELO_NAME)
+                return smtp
+            except (socket.error, smtplib.SMTPException):
+                smtp.close()
     return None
 
 
