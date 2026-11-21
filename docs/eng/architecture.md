@@ -28,7 +28,13 @@ Logging: every log (sampling 1, with invocation logs), traces at 1 %, query stri
 
 ## Accounts and sessions
 
-Accounts and everything that belongs to them live in D1, the sessions in KV. Sign-in is with a password (with optional TOTP) or with Google or Microsoft. Sensitive actions, such as changing a saved email account, require that the sign-in is at most 15 minutes old; otherwise the page asks you to confirm again.
+<!-- coderabbit-ai-generated:v1 -->
+
+<!-- coderabbit-ai-generated-section:v1:74590d0b7cf5acf041770dfce7bd53f0958b4284e8ede95ea0a0e332d1682965 -->
+
+Accounts and everything that belongs to them live in D1, the sessions in KV. Sign-in is with a password (with optional TOTP) or with Google or Microsoft. OAuth sign-in is bound to the browser and selected provider using a temporary cookie that lasts ten minutes. Sign-ins started before an update to this protection must be restarted. Sensitive actions, such as changing a saved email account, require that the sign-in is at most 15 minutes old; otherwise the page asks you to confirm again.
+
+<!-- /coderabbit-ai-generated:v1 -->
 
 ## The public register
 
