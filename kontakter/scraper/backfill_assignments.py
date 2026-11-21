@@ -34,6 +34,7 @@ from urllib.parse import urljoin
 from urllib.request import Request, urlopen
 
 import sources
+from html_text import strip_tags
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 WRANGLER_CONFIG = REPO_ROOT / "app" / "wrangler.jsonc"
@@ -76,7 +77,7 @@ def fetch(url: str, timeout: int = 30) -> str | None:
 
 
 def clean_text(fragment: str) -> str:
-    text = html.unescape(re.sub(r"<[^>]+>", "", fragment))
+    text = html.unescape(strip_tags(fragment, ""))
     return re.sub(r"\s+", " ", text).strip()
 
 

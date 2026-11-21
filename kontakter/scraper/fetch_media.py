@@ -32,6 +32,7 @@ import requests
 
 import sources
 from d1 import D1Client
+from html_text import strip_tags
 
 UA = {"User-Agent": os.environ.get("SCRAPER_USER_AGENT", "politiker-contact-refresh/1.0")}
 EMAIL_RE = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
@@ -64,7 +65,7 @@ def fetch_html(url: str) -> str:
 
 
 def visible_text(raw_html: str) -> str:
-    return html.unescape(re.sub(r"<[^>]+>", "\n", raw_html))
+    return html.unescape(strip_tags(raw_html))
 
 
 def display_name_from_email(email: str) -> str:

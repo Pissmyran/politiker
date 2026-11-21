@@ -34,6 +34,7 @@ import requests
 
 import sources
 from d1 import D1Client
+from html_text import strip_tags
 
 
 EMAIL_RE = re.compile(r"[\w.+-]+@[\w.-]+\.\w{2,}")
@@ -54,7 +55,7 @@ UPSERT_SQL = (
 def page_lines(base_url: str, path: str) -> list[str]:
     resp = requests.get(base_url + path, headers={"User-Agent": "Mozilla/5.0"}, timeout=30)
     resp.raise_for_status()
-    text = html.unescape(re.sub(r"<[^>]+>", "\n", resp.text))
+    text = html.unescape(strip_tags(resp.text))
     return [ln.strip() for ln in text.split("\n") if ln.strip()]
 
 
