@@ -5,6 +5,27 @@ from __future__ import annotations
 
 import re
 
+ASCII_EMAIL_LOCAL_RE = re.compile(r"[A-Za-z0-9._%+-]+")
+UNICODE_EMAIL_LOCAL_RE = re.compile(r"[\w.+-]+")
+
+
+def iter_email_matches(text: str, email_re: re.Pattern, local_re: re.Pattern):
+    """Search once per local-part run, preserving the email pattern's matches.
+
+    The email patterns' domain characters must also be local-part characters.
+    A failed match cannot start at a later position within the same run.
+    """
+    pos = 0
+    while candidate := local_re.search(text, pos):
+        end = candidate.end()
+        match = email_re.match(text, candidate.start()) if end < len(text) and text[end] == "@" else None
+        if match:
+            yield match
+            pos = match.end()
+        else:
+            pos = end
+
+
 PARTY_ALIASES = {
     "s": "S", "socialdemokraterna": "S", "socialdemokratiska arbetarepartiet": "S",
     "m": "M", "moderaterna": "M", "moderata samlingspartiet": "M",

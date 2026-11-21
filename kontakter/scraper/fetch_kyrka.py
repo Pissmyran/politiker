@@ -34,6 +34,7 @@ import requests
 
 import sources
 from d1 import D1Client
+from politiker_common import UNICODE_EMAIL_LOCAL_RE, iter_email_matches
 
 
 EMAIL_RE = re.compile(r"[\w.+-]+@[\w.-]+\.\w{2,}")
@@ -85,7 +86,7 @@ def extract(lines: list[str], area_name: str) -> list[tuple[str, str, str, str]]
     """-> [(name, email, party, role)]. Mönster: namn / uppdrag / 'E-post:' / mejl."""
     rows = []
     for i, line in enumerate(lines):
-        m = EMAIL_RE.search(line)
+        m = next(iter_email_matches(line, EMAIL_RE, UNICODE_EMAIL_LOCAL_RE), None)
         if not m or i < 3:
             continue
         if not lines[i - 1].lower().startswith("e-post"):
