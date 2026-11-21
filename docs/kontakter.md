@@ -36,6 +36,14 @@ Skripten som använder D1:s HTTP-API läser variablerna ur miljön. `sanitize_d1
 | `sanitize_d1.py` | Normaliserar och rensar registret utan att hämta något nytt. `--apply` skriver ändringarna. |
 | `verify/verify_emails.py` | Kontrollerar adresserna mot mottagarnas e-postservrar utan att skicka något. |
 
+<!-- coderabbit-ai-generated:v1 -->
+
+<!-- coderabbit-ai-generated-section:v1:e379fbbcb435d33e5def3a3c400e93e0dd3ed1fbb580e9c921e47c3d58319b84 -->
+
+Medieskrapan följer bara omdirigeringar inom källsidans ursprung (protokoll, värd och port). Uppdatera källans URL om den flyttar till ett annat ursprung.
+
+<!-- /coderabbit-ai-generated:v1 -->
+
 ## Kvartalskörningen
 
 `kontakter/scraper/quarterly_refresh.sh` kör alla verktygen utom `verify/verify_emails.py` i rätt ordning och sist `sanitize_d1.py --apply`. Den är tänkt att schemaläggas var tredje månad. Om schemaläggaren använder en fil med variablerna sätter den `POLITIKER_ENV_FILE` till den filen; skriptet stoppar om `CONTACT_SOURCES_DIR` saknas.

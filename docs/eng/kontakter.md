@@ -36,6 +36,14 @@ The scripts that use D1's HTTP API read the variables from the environment. `san
 | `sanitize_d1.py` | Normalizes and cleans the register without fetching anything new. `--apply` writes the changes. |
 | `verify/verify_emails.py` | Checks the addresses against the recipients' mail servers without sending anything. |
 
+<!-- coderabbit-ai-generated:v1 -->
+
+<!-- coderabbit-ai-generated-section:v1:58ed8c4fcb9771ac570698803a826764a74591e8b964231270e80a8c87fa6129 -->
+
+The media scraper follows redirects only within the source page’s origin (scheme, host and port). Update the source URL if it moves to a different origin.
+
+<!-- /coderabbit-ai-generated:v1 -->
+
 ## The quarterly run
 
 `kontakter/scraper/quarterly_refresh.sh` runs every tool except `verify/verify_emails.py` in the right order and last `sanitize_d1.py --apply`. It is meant to be scheduled every three months. If the scheduler uses a file with the variables, it sets `POLITIKER_ENV_FILE` to that file; the script stops if `CONTACT_SOURCES_DIR` is missing.

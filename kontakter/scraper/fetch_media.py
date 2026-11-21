@@ -57,10 +57,32 @@ UPSERT_SQL = (
 )
 
 
+def http_origin(url: str) -> tuple[str, str, int]:
+    # Compare the URL after Requests has normalized it, as that is what it sends.
+    prepared = requests.Request("GET", url).prepare().url
+    parsed = urlparse(prepared)
+    if parsed.scheme not in ("http", "https") or not parsed.hostname or parsed.username is not None:
+        raise ValueError("Invalid media source URL")
+    return parsed.scheme, parsed.hostname, parsed.port or (443 if parsed.scheme == "https" else 80)
+
+
 def fetch_html(url: str) -> str:
-    r = requests.get(url, headers=UA, timeout=30)
-    r.raise_for_status()
-    return r.text
+    origin = http_origin(url)
+    with requests.Session() as session:
+        for _ in range(11):
+            r = session.get(url, headers=UA, timeout=30, allow_redirects=False)
+            if not 300 <= r.status_code < 400:
+                r.raise_for_status()
+                return r.text
+            try:
+                if r.status_code not in (301, 302, 303, 307, 308) or not r.headers.get("Location"):
+                    raise ValueError("Invalid media redirect")
+                url = urljoin(url, r.headers["Location"])
+                if http_origin(url) != origin:
+                    raise ValueError("Media redirect leaves the source origin")
+            finally:
+                r.close()
+    raise requests.TooManyRedirects("Too many media redirects")
 
 
 def visible_text(raw_html: str) -> str:
@@ -134,13 +156,16 @@ def scrape_recent_section_authors(section_url: str, organisation: str, role: str
     except Exception as exc:
         print(f"VARNING: kunde inte läsa sektion {section_url}: {exc}", file=sys.stderr)
         return []
-    host = urlparse(section_url).netloc
+    origin = http_origin(section_url)
     links: list[str] = []
     seen: set[str] = set()
     for href in HREF_RE.findall(page):
-        url = urljoin(section_url, html.unescape(href))
-        parsed = urlparse(url)
-        if parsed.netloc != host or url in seen or url == section_url:
+        try:
+            url = urljoin(section_url, html.unescape(href))
+            same_origin = http_origin(url) == origin
+        except (ValueError, requests.RequestException):
+            continue
+        if not same_origin or url in seen or url == section_url:
             continue
         seen.add(url)
         links.append(url)
