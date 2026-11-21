@@ -1,3 +1,5 @@
+> Guide: [AI- och Copilot-inställningar på GitHub](https://github.com/pissmyran/.github/blob/main/public/ai-och-copilot.md) · [English](https://github.com/pissmyran/.github/blob/main/public/eng/ai-and-copilot.md)
+
 # PolitikerKontakt
 
 **Dokumentation:** [pissmyran.github.io/politiker](https://pissmyran.github.io/politiker/) – start, dokumentation och Docker på en sida med sök.
