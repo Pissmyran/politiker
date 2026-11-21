@@ -36,6 +36,8 @@ The scripts that use D1's HTTP API read the variables from the environment. `san
 | `sanitize_d1.py` | Normalizes and cleans the register without fetching anything new. `--apply` writes the changes. |
 | `verify/verify_emails.py` | Checks the addresses against the recipients' mail servers without sending anything. |
 
+Backfill identifies the database with `wrangler d1 info` before reading or writing. Backfill stores retry data in `/tmp/politiker-assignments-backfill-<uid>/replay.json` with owner-only access. A retry uses only a cache for the same D1 database and checks that the contacts still exist in the correct area. An invalid cache stops the script; inspect and remove the file if a fresh scrape is needed. The old shared file `/tmp/politiker-assignments-backfill.json` is not used.
+
 ## The quarterly run
 
 `kontakter/scraper/quarterly_refresh.sh` runs every tool except `verify/verify_emails.py` in the right order and last `sanitize_d1.py --apply`. It is meant to be scheduled every three months. If the scheduler uses a file with the variables, it sets `POLITIKER_ENV_FILE` to that file; the script stops if `CONTACT_SOURCES_DIR` is missing.

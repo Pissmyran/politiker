@@ -13,7 +13,7 @@ som redan används av resten av repot och skriptet kräver inga separata
 CLOUDFLARE_* eller D1_* miljövariabler. HTTP-hämtning använder endast Pythons
 standardbibliotek, så inga pip-paket behövs heller.
 
-Skrapresultatet cachelagras i /tmp innan D1-skrivningen. Om en D1-batch skulle
+Skrapresultatet cachelagras i en privat katalog i /tmp innan D1-skrivningen. Om en D1-batch skulle
 misslyckas kan skriptet köras igen utan att skrapa om alla 150 källor. Cachen
 tas först bort efter att en separat D1-SELECT verifierat både antal kopplingar
 och antal politiker för den aktuella körningen.
@@ -24,10 +24,14 @@ import html
 import json
 import os
 import re
+import secrets
+import stat
 import subprocess
 import sys
 import tempfile
 import time
+import uuid
+from contextlib import contextmanager
 from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.parse import urljoin
@@ -38,7 +42,8 @@ import sources
 REPO_ROOT = Path(__file__).resolve().parents[2]
 WRANGLER_CONFIG = REPO_ROOT / "app" / "wrangler.jsonc"
 D1_NAME = os.environ.get("D1_DATABASE_NAME", "politiker")
-CACHE_PATH = Path("/tmp/politiker-assignments-backfill.json")
+CACHE_DIR = Path(f"/tmp/politiker-assignments-backfill-{os.geteuid()}")
+CACHE_PATH = CACHE_DIR / "replay.json"
 BATCH_PEOPLE = 200
 
 # Dessa namn beskriver inte en avgränsad huvudnämnd som är rimlig att rikta ett
@@ -143,16 +148,30 @@ def bodies(page_html: str) -> list[str]:
     return found
 
 
-def wrangler_args() -> list[str]:
+def wrangler_args(database_id: str) -> list[str]:
     return [
-        "npx", "wrangler", "d1", "execute", D1_NAME,
+        "npx", "wrangler", "d1", "execute", database_id,
         "--remote", "--config", str(WRANGLER_CONFIG),
     ]
 
 
-def wrangler_json(sql: str) -> object:
+def resolve_database_id() -> str:
+    # Wrangler's info and execute commands resolve names/bindings in the same way.
     proc = subprocess.run(
-        wrangler_args() + ["--command", sql, "--json"],
+        ["npx", "wrangler", "d1", "info", D1_NAME, "--config", str(WRANGLER_CONFIG), "--json"],
+        cwd=REPO_ROOT, text=True, capture_output=True,
+    )
+    if proc.returncode != 0:
+        sys.exit("FEL: kunde inte identifiera D1-databasen via Wrangler. " + proc.stderr.strip())
+    try:
+        return str(uuid.UUID(json.loads(proc.stdout)["uuid"]))
+    except (ValueError, TypeError, KeyError, json.JSONDecodeError):
+        sys.exit("FEL: Wrangler returnerade inte ett giltigt D1-databas-id.")
+
+
+def wrangler_json(sql: str, database_id: str) -> object:
+    proc = subprocess.run(
+        wrangler_args(database_id) + ["--command", sql, "--json"],
         cwd=REPO_ROOT,
         text=True,
         capture_output=True,
@@ -188,11 +207,11 @@ def find_result_rows(value: object) -> list[dict]:
     return []
 
 
-def load_politician_index() -> dict[tuple[str, str], str]:
+def load_politician_index(database_id: str) -> dict[tuple[str, str], str]:
     print("Läser befintliga politiker från D1 via Wrangler...", flush=True)
     payload = wrangler_json(
         "SELECT id, lower(trim(email)) AS email, area_name FROM public_contacts "
-        "WHERE email IS NOT NULL AND trim(email) <> '';"
+        "WHERE email IS NOT NULL AND trim(email) <> '';", database_id
     )
     rows = find_result_rows(payload)
     if not rows:
@@ -212,38 +231,95 @@ def sql_quote(value: str) -> str:
     return "'" + value.replace("'", "''") + "'"
 
 
-def save_cache(changes: dict[str, tuple[str, set[str]]], now_ms: int) -> None:
+@contextmanager
+def cache_directory():
+    try:
+        try:
+            os.mkdir(CACHE_DIR, 0o700)
+        except FileExistsError:
+            pass
+        fd = os.open(CACHE_DIR, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        try:
+            info = os.fstat(fd)
+            if info.st_uid != os.geteuid() or stat.S_IMODE(info.st_mode) != 0o700:
+                raise ValueError("directory must be owned by the current user and have mode 0700")
+            yield fd
+        finally:
+            os.close(fd)
+    except (OSError, ValueError) as exc:
+        sys.exit(f"FEL: osäker eller otillgänglig cachekatalog {CACHE_DIR}: {exc}")
+
+
+def save_cache(changes: dict[str, tuple[str, set[str]]], now_ms: int, database_id: str) -> None:
+    if not changes:
+        return
     payload = {
+        "database_id": database_id,
         "created_at_ms": now_ms,
         "changes": {
             pid: {"area_name": area, "bodies": sorted(person_bodies, key=str.casefold)}
             for pid, (area, person_bodies) in changes.items()
         },
     }
-    CACHE_PATH.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+    with cache_directory() as directory:
+        temporary = ".replay-" + secrets.token_hex(16)
+        try:
+            fd = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600, dir_fd=directory)
+            try:
+                with os.fdopen(fd, "w", encoding="utf-8") as file:
+                    json.dump(payload, file, ensure_ascii=False)
+                # Link exclusively so a concurrent job cannot overwrite replay state.
+                os.link(temporary, CACHE_PATH.name, src_dir_fd=directory, dst_dir_fd=directory)
+            finally:
+                os.unlink(temporary, dir_fd=directory)
+        except FileExistsError:
+            sys.exit(f"FEL: cache finns redan i {CACHE_PATH}; starta inte parallella körningar.")
     print(f"Skrapresultatet cachelagrat i {CACHE_PATH}.", flush=True)
 
 
-def load_cache() -> tuple[dict[str, tuple[str, set[str]]], int] | None:
-    if not CACHE_PATH.exists():
-        return None
+def load_cache(database_id: str) -> tuple[dict[str, tuple[str, set[str]]], int] | None:
+    with cache_directory() as directory:
+        try:
+            fd = os.open(CACHE_PATH.name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=directory)
+        except FileNotFoundError:
+            return None
+        try:
+            info = os.fstat(fd)
+            if (not stat.S_ISREG(info.st_mode) or info.st_uid != os.geteuid()
+                    or stat.S_IMODE(info.st_mode) != 0o600 or info.st_nlink != 1):
+                raise ValueError("cache must be a private, user-owned regular file")
+            with os.fdopen(fd, encoding="utf-8", closefd=False) as file:
+                payload = json.load(file)
+        finally:
+            os.close(fd)
     try:
-        payload = json.loads(CACHE_PATH.read_text(encoding="utf-8"))
-        raw_changes = payload.get("changes", {})
-        changes = {
-            str(pid): (str(item["area_name"]), set(map(str, item.get("bodies", []))))
-            for pid, item in raw_changes.items()
-            if item.get("area_name") and item.get("bodies")
-        }
-        now_ms = int(payload.get("created_at_ms") or int(time.time() * 1000))
-    except (OSError, ValueError, TypeError, KeyError, json.JSONDecodeError):
-        return None
-    if not changes:
-        return None
+        if payload["database_id"] != database_id:
+            raise ValueError("database id does not match")
+        now_ms = payload["created_at_ms"]
+        raw_changes = payload["changes"]
+        if type(now_ms) is not int or now_ms <= 0 or not isinstance(raw_changes, dict) or not raw_changes:
+            raise ValueError("invalid timestamp or changes")
+        changes = {}
+        for pid, item in raw_changes.items():
+            area, bodies_list = item["area_name"], item["bodies"]
+            if (not isinstance(pid, str) or not pid or not isinstance(area, str) or not area
+                    or not isinstance(bodies_list, list) or not bodies_list
+                    or any(not isinstance(body, str) or normalize_body(body) != body for body in bodies_list)):
+                raise ValueError("invalid cached contact or body")
+            changes[pid] = (area, set(bodies_list))
+    except (ValueError, TypeError, KeyError) as exc:
+        sys.exit(f"FEL: ogiltig cache i {CACHE_PATH}: {exc}")
     return changes, now_ms
 
 
-def write_batch(batch: list[tuple[str, tuple[str, set[str]]]], now_ms: int, number: int, total: int) -> None:
+def validate_cached_contacts(changes: dict[str, tuple[str, set[str]]], database_id: str) -> None:
+    index = load_politician_index(database_id)
+    current = {(pid, area) for (area, _email), pid in index.items()}
+    if any((pid, area) not in current for pid, (area, _bodies) in changes.items()):
+        sys.exit(f"FEL: cache innehåller kontakter som inte längre matchar D1. Kontrollera {CACHE_PATH}.")
+
+
+def write_batch(batch: list[tuple[str, tuple[str, set[str]]]], now_ms: int, number: int, total: int, database_id: str) -> None:
     # D1:s remote execute tillåter inte BEGIN TRANSACTION/SAVEPOINT i SQL-filer.
     # Varje politiker är ändå idempotent: DELETE följt av INSERT OR IGNORE. Om en
     # batch avbryts kan cachen köras om säkert; samma politiker byggs då om igen.
@@ -277,7 +353,7 @@ def write_batch(batch: list[tuple[str, tuple[str, set[str]]]], now_ms: int, numb
             flush=True,
         )
         proc = subprocess.run(
-            wrangler_args() + ["--file", str(tmp_path), "--yes"],
+            wrangler_args(database_id) + ["--file", str(tmp_path), "--yes"],
             cwd=REPO_ROOT,
         )
         if proc.returncode != 0:
@@ -290,11 +366,11 @@ def write_batch(batch: list[tuple[str, tuple[str, set[str]]]], now_ms: int, numb
             tmp_path.unlink(missing_ok=True)
 
 
-def verify_assignments(expected_people: int, expected_bodies: int, now_ms: int) -> None:
+def verify_assignments(expected_people: int, expected_bodies: int, now_ms: int, database_id: str) -> None:
     payload = wrangler_json(
         "SELECT COUNT(*) AS assignments, COUNT(DISTINCT contact_id) AS public_contacts "
         "FROM public_contact_assignments "
-        f"WHERE source = 'troman' AND last_scraped_at = {now_ms};"
+        f"WHERE source = 'troman' AND last_scraped_at = {now_ms};", database_id
     )
     rows = find_result_rows(payload)
     if not rows:
@@ -315,7 +391,7 @@ def verify_assignments(expected_people: int, expected_bodies: int, now_ms: int) 
         )
 
 
-def write_assignments(changes: dict[str, tuple[str, set[str]]], now_ms: int) -> None:
+def write_assignments(changes: dict[str, tuple[str, set[str]]], now_ms: int, database_id: str) -> None:
     if not changes:
         print("Inga nämnd/organ-kopplingar att skriva.", flush=True)
         return
@@ -328,14 +404,15 @@ def write_assignments(changes: dict[str, tuple[str, set[str]]], now_ms: int) -> 
         flush=True,
     )
     for number, batch in enumerate(batches, 1):
-        write_batch(batch, now_ms, number, len(batches))
-    verify_assignments(len(items), total_bodies, now_ms)
-    CACHE_PATH.unlink(missing_ok=True)
+        write_batch(batch, now_ms, number, len(batches), database_id)
+    verify_assignments(len(items), total_bodies, now_ms, database_id)
+    with cache_directory() as directory:
+        os.unlink(CACHE_PATH.name, dir_fd=directory)
     print("Alla D1-batchar verifierade; backfill-cachen borttagen.", flush=True)
 
 
-def scrape_changes() -> tuple[dict[str, tuple[str, set[str]]], int, int, int, int]:
-    politician_index = load_politician_index()
+def scrape_changes(database_id: str) -> tuple[dict[str, tuple[str, set[str]]], int, int, int, int]:
+    politician_index = load_politician_index(database_id)
     targets = [row for row in load_regioner() if row.get("typ") == "troman"]
     now_ms = int(time.time() * 1000)
     total_people = total_bodies = total_missing = 0
@@ -388,14 +465,16 @@ def scrape_changes() -> tuple[dict[str, tuple[str, set[str]]], int, int, int, in
             flush=True,
         )
 
-    save_cache(changes, now_ms)
+    save_cache(changes, now_ms, database_id)
     return changes, now_ms, total_people, total_bodies, total_missing
 
 
 def main() -> None:
-    cached = load_cache()
+    database_id = resolve_database_id()
+    cached = load_cache(database_id)
     if cached:
         changes, now_ms = cached
+        validate_cached_contacts(changes, database_id)
         total_people = len(changes)
         total_bodies = sum(len(v[1]) for v in changes.values())
         total_missing = 0
@@ -405,9 +484,9 @@ def main() -> None:
             flush=True,
         )
     else:
-        changes, now_ms, total_people, total_bodies, total_missing = scrape_changes()
+        changes, now_ms, total_people, total_bodies, total_missing = scrape_changes(database_id)
 
-    write_assignments(changes, now_ms)
+    write_assignments(changes, now_ms, database_id)
     print(
         f"\nKlart: {total_people} personer, {total_bodies} relevanta nämnd/organ-kopplingar, "
         f"{total_missing} profiler utan D1-match.",
