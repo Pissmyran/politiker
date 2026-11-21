@@ -26,8 +26,13 @@ interface SmtpResponse {
 interface Connection {
   write: (line: string) => Promise<void>;
   read: () => Promise<SmtpResponse>;
-  quit: () => Promise<void>;
+  quit: (success: boolean) => Promise<void>;
 }
+
+const MAX_SMTP_REPLY_LINE_BYTES = 4096;
+const MAX_SMTP_REPLY_BYTES = 64 * 1024;
+// RFC 5321 recommends up to ten minutes for a DATA termination reply.
+const SMTP_REPLY_TIMEOUT_MS = 10 * 60 * 1000;
 
 async function openConnection(host: string, port: number): Promise<Connection> {
   const useDirectTls = port === 465;
@@ -40,31 +45,36 @@ async function openConnection(host: string, port: number): Promise<Connection> {
   const read = () => readSmtpResponse(reader);
   const write = (line: string) => writer.write(new TextEncoder().encode(line + "\r\n"));
 
-  await expect(await read(), 220, "Servern svarade inte med 220 vid anslutning");
-  await write("EHLO __PUBLIC_HOST__");
-  await read();
-
-  if (!useDirectTls) {
-    await write("STARTTLS");
-    await expect(await read(), 220, "STARTTLS nekades av servern");
-    writer.releaseLock();
-    reader.releaseLock();
-    socket = await socket.startTls();
-    writer = socket.writable.getWriter();
-    reader = socket.readable.getReader();
+  try {
+    await expect(await read(), 220, "Servern svarade inte med 220 vid anslutning");
     await write("EHLO __PUBLIC_HOST__");
     await read();
-  }
 
-  const quit = async () => {
-    try {
-      await write("QUIT");
-    } catch {}
-    try {
+    if (!useDirectTls) {
+      await write("STARTTLS");
+      await expect(await read(), 220, "STARTTLS nekades av servern");
       writer.releaseLock();
-    } catch {}
-  };
-  return { write, read, quit };
+      reader.releaseLock();
+      socket = socket.startTls();
+      writer = socket.writable.getWriter();
+      reader = socket.readable.getReader();
+      await write("EHLO __PUBLIC_HOST__");
+      await read();
+    }
+
+    const quit = async (success: boolean) => {
+      try {
+        if (success) await write("QUIT");
+      } catch {
+      } finally {
+        void socket.close().catch(() => {});
+      }
+    };
+    return { write, read, quit };
+  } catch (error) {
+    void socket.close().catch(() => {});
+    throw error;
+  }
 }
 
 async function authenticate(conn: Connection, config: SmtpConfig): Promise<void> {
@@ -93,6 +103,7 @@ export async function sendSmtpMail(
   const from = validateMailboxAddress(config.fromAddress, "avsändaradress");
   const to = validateMailboxAddress(opts.to, "mottagaradress");
   const conn = await openConnection(config.host, config.port);
+  let success = false;
   try {
     await authenticate(conn, config);
     await conn.write(`MAIL FROM:<${from}>`);
@@ -108,8 +119,9 @@ export async function sendSmtpMail(
     const stuffed = message.replace(/\r?\n\./g, "\n..");
     await conn.write(`${stuffed}\r\n.`);
     await expect(await conn.read(), 250, "Mejlet accepterades inte av servern");
+    success = true;
   } finally {
-    await conn.quit();
+    await conn.quit(success);
   }
 }
 
@@ -165,26 +177,57 @@ function wrapBase64(base64: string): string {
 export async function testSmtpAuth(config: SmtpConfig): Promise<void> {
   validateMailboxAddress(config.fromAddress, "avsändaradress");
   const conn = await openConnection(config.host, config.port);
+  let success = false;
   try {
     await authenticate(conn, config);
+    success = true;
   } finally {
-    await conn.quit();
+    await conn.quit(success);
   }
 }
 
 async function readSmtpResponse(
   reader: ReadableStreamDefaultReader<Uint8Array>,
 ): Promise<SmtpResponse> {
-  let buffer = "";
+  let timer: ReturnType<typeof setTimeout>;
+  try {
+    return await Promise.race([
+      parseSmtpResponse(reader),
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(
+          () => reject(new SmtpError("SMTP-servern svarade inte i tid")),
+          SMTP_REPLY_TIMEOUT_MS,
+        );
+      }),
+    ]);
+  } finally {
+    clearTimeout(timer!);
+  }
+}
+
+async function parseSmtpResponse(
+  reader: ReadableStreamDefaultReader<Uint8Array>,
+): Promise<SmtpResponse> {
+  const line = new Uint8Array(MAX_SMTP_REPLY_LINE_BYTES);
+  const lines: string[] = [];
   const decoder = new TextDecoder();
+  let lineLength = 0;
+  let totalBytes = 0;
   while (true) {
     const { value, done } = await reader.read();
     if (done) throw new SmtpError("Anslutningen stängdes oväntat");
-    buffer += decoder.decode(value, { stream: true });
-    const lines = buffer.split("\r\n").filter(Boolean);
-    const last = lines[lines.length - 1];
-    if (last && /^\d{3} /.test(last))
-      return { code: parseInt(last.slice(0, 3), 10), text: lines.join("\n") };
+    for (const byte of value) {
+      if (++totalBytes > MAX_SMTP_REPLY_BYTES || lineLength === line.length)
+        throw new SmtpError("SMTP-serverns svar är för långt");
+      line[lineLength++] = byte;
+      if (lineLength >= 2 && line[lineLength - 2] === 13 && byte === 10) {
+        const text = decoder.decode(line.subarray(0, lineLength - 2));
+        lineLength = 0;
+        if (text) lines.push(text);
+        if (/^\d{3} /.test(text))
+          return { code: parseInt(text.slice(0, 3), 10), text: lines.join("\n") };
+      }
+    }
   }
 }
 async function expect(
