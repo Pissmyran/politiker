@@ -38,34 +38,41 @@ async function backfillUserLetters(env: PrivacyEnv): Promise<void> {
 }
 
 async function redactFinishedUserLetters(env: PrivacyEnv, now: number): Promise<void> {
+  const { results: deletedJobs } = await env.DB.prepare(
+    "SELECT letter_id AS id FROM letter_retention_queue WHERE content_delete_at <= ? LIMIT 100",
+  )
+    .bind(now)
+    .all<{ id: string }>();
   const { results } = await env.DB.prepare(
     `SELECT DISTINCT l.id FROM letters l JOIN send_jobs sj ON sj.letter_id=l.id WHERE sj.status IN ('done','aborted','cancelled') AND sj.content_delete_at IS NOT NULL AND sj.content_delete_at <= ? AND l.html_body != ? LIMIT 100`,
   )
     .bind(now, REDACTED)
     .all<{ id: string }>();
-  for (const row of results) {
+  const letterIds = new Set([...deletedJobs, ...results].map((row) => row.id));
+  for (const id of letterIds) {
     const { results: attachments } = await env.DB.prepare(
       "SELECT r2_key FROM letter_attachments WHERE letter_id=?",
     )
-      .bind(row.id)
+      .bind(id)
       .all<{ r2_key: string }>();
     if (attachments.length) {
       try {
         await env.ATTACHMENTS.delete(attachments.map((a) => a.r2_key));
       } catch (error) {
         console.warn("letter-retention: R2 cleanup failed", {
-          letterId: row.id,
+          letterId: id,
           error: String(error),
         });
         continue;
       }
     }
     await env.DB.batch([
-      env.DB.prepare("DELETE FROM letter_attachments WHERE letter_id=?").bind(row.id),
-      env.DB.prepare("UPDATE letters SET html_body=? WHERE id=?").bind(REDACTED, row.id),
+      env.DB.prepare("DELETE FROM letter_attachments WHERE letter_id=?").bind(id),
+      env.DB.prepare("UPDATE letters SET html_body=? WHERE id=?").bind(REDACTED, id),
       env.DB.prepare(
         "UPDATE send_jobs SET intro_text=? WHERE letter_id=? AND intro_text IS NOT NULL",
-      ).bind(REDACTED, row.id),
+      ).bind(REDACTED, id),
+      env.DB.prepare("DELETE FROM letter_retention_queue WHERE letter_id=?").bind(id),
     ]);
   }
 }

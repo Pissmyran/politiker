@@ -50,6 +50,14 @@ Varje konto kan ha egna kontaktlistor. Återanvändbara inledningar ligger i `le
 
 Inledningarna sparas krypterat på utskicket (`send_jobs.intro_text`) när det startar, så att en senare ändring av en mall inte påverkar ett pågående utskick. Brevets innehåll raderas automatiskt efter den tid användaren valt: 5 minuter, 1 dag, 3 dagar eller 7 dagar efter att utskicket är klart.
 
+<!-- coderabbit-ai-generated:v1 -->
+
+<!-- coderabbit-ai-generated-section:v1:9cfdfeb4a7cdf231043575631155dd38ae87297db2781ab1d0cd00ae369bde18 -->
+
+Om utskicket tas bort ur historiken behålls raderingstiden tills brevet och dess bilagor har raderats. Om lagringen inte svarar försöker schemaläggaren igen.
+
+<!-- /coderabbit-ai-generated:v1 -->
+
 Kön och DLQ visar bara transportens tillstånd. Utskickets verkliga status finns i D1.
 
 ## Takten
