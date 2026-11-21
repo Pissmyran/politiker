@@ -50,7 +50,13 @@ Varje konto kan ha egna kontaktlistor. Återanvändbara inledningar ligger i `le
 
 Inledningarna sparas krypterat på utskicket (`send_jobs.intro_text`) när det startar, så att en senare ändring av en mall inte påverkar ett pågående utskick. Brevets innehåll raderas automatiskt efter den tid användaren valt: 5 minuter, 1 dag, 3 dagar eller 7 dagar efter att utskicket är klart.
 
-Kön och DLQ visar bara transportens tillstånd. Utskickets verkliga status finns i D1.
+<!-- coderabbit-ai-generated:v1 -->
+
+<!-- coderabbit-ai-generated-section:v1:c01ad6d648da9476fa039e36424f2560085c2014d82c17052eaa7ab523965296 -->
+
+Kön och DLQ visar bara transportens tillstånd. Utskickets verkliga status finns i D1. Leveransresultat sparas på utskicket och ändrar inte det gemensamma kontaktregistrets verifieringsstatus. Äldre status `dead_via_send` hindrar inte val av mottagare; status `dead` från registrets verifiering filtreras fortfarande bort.
+
+<!-- /coderabbit-ai-generated:v1 -->
 
 ## Takten
 

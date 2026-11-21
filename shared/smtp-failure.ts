@@ -37,22 +37,3 @@ export function visibleSendJobError(
   if (isMailCredentialFailure(error)) return status === "aborted" ? error : null;
   return error;
 }
-
-export function isPermanentRecipientSmtpFailure(error: unknown): boolean {
-  const message = errorMessage(error);
-  if (!/^RCPT TO nekades\b/i.test(message)) return false;
-
-  const normalized = message.toLowerCase();
-  if (/\b5\.1\.\d{1,3}\b/.test(normalized)) return true;
-
-  return [
-    "user unknown",
-    "unknown user",
-    "no such user",
-    "no such recipient",
-    "recipient not found",
-    "mailbox does not exist",
-    "invalid recipient",
-    "address rejected",
-  ].some((marker) => normalized.includes(marker));
-}

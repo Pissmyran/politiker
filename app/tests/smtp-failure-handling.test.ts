@@ -4,7 +4,6 @@ import { test } from "node:test";
 import { assertSourceMatch, assertSourceNoMatch } from "./compact-source.ts";
 import {
   isMailCredentialFailure,
-  isPermanentRecipientSmtpFailure,
   isSmtpAuthenticationFailure,
   isTransientSmtpFailure,
   visibleSendJobError,
@@ -79,29 +78,6 @@ test("active jobs still show non-authentication send errors", () => {
   assert.equal(visibleSendJobError("sending", error), error);
 });
 
-test("only permanent recipient rejections mark an address as dead", () => {
-  assert.equal(
-    isPermanentRecipientSmtpFailure(new Error("RCPT TO nekades (550): 550 5.1.1 User unknown")),
-    true,
-  );
-  assert.equal(
-    isPermanentRecipientSmtpFailure(new Error("RCPT TO nekades (550): 550 5.7.1 Policy rejection")),
-    false,
-  );
-  assert.equal(
-    isPermanentRecipientSmtpFailure(
-      new Error("RCPT TO nekades (451): 451 4.2.0 Temporary failure"),
-    ),
-    false,
-  );
-  assert.equal(
-    isPermanentRecipientSmtpFailure(
-      new Error("Inloggning misslyckades (535): authentication failed"),
-    ),
-    false,
-  );
-});
-
 test("queue aborts on credential failures without counting them as sent or poisoning the recipient", () => {
   assertSourceMatch(
     queueSource,
@@ -110,10 +86,6 @@ test("queue aborts on credential failures without counting them as sent or poiso
   assertSourceMatch(
     queueSource,
     /\.bind\(\s*sentCount\s*,\s*bounceCount\s*,\s*aborted\s*\?\s*"aborted"\s*:\s*"sending"\s*,\s*sendJobId\s*\)/,
-  );
-  assertSourceMatch(
-    queueSource,
-    /else\s+if\s*\(\s*markRecipientDead\s*\)\s*await\s+env\.DB\.prepare\(\s*"UPDATE public_contacts SET verification_status='dead_via_send'/,
   );
 });
 
