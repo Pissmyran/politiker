@@ -30,6 +30,14 @@ Logging: every log (sampling 1, with invocation logs), traces at 1 %, query stri
 
 Accounts and everything that belongs to them live in D1, the sessions in KV. Sign-in is with a password (with optional TOTP) or with Google or Microsoft. Sensitive actions, such as changing a saved email account, require that the sign-in is at most 15 minutes old; otherwise the page asks you to confirm again.
 
+<!-- coderabbit-ai-generated:v1 -->
+
+<!-- coderabbit-ai-generated-section:v1:98e51f339321470a9490198d8cea34d27ad0b6a0e1623a591dd163e45d360c48 -->
+
+When an OAuth sign-in claims an unverified registration, the previous password is replaced. The user can then set a new password.
+
+<!-- /coderabbit-ai-generated:v1 -->
+
 ## The public register
 
 `public_contacts` is the shared register: politicians at every level, authorities, newsrooms, the Church of Sweden and academics. `area_type` tells the groups apart. Academics also have a university, unit, title, field and source page. `public_contact_assignments` links municipal and regional politicians to committees and boards for filtering by policy area.
