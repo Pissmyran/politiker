@@ -48,6 +48,27 @@ test("explicit recipients support both raw addresses and display names", () => {
   assert.equal(parseIncludedRecipient("not-an-email"), null);
 });
 
+test("explicit recipients handle long and malformed display tokens", () => {
+  const spaces = " ".repeat(100_000);
+  const started = performance.now();
+  assert.equal(parseIncludedRecipient(`Name${spaces}invalid`), null);
+  assert.ok(performance.now() - started < 250, "long token parsing must stay fast");
+  assert.deepEqual(parseIncludedRecipient(`${"N".repeat(200)}${spaces}<EXTRA@example.com>`), {
+    email: "extra@example.com",
+    name: "N".repeat(160),
+  });
+  assert.deepEqual(parseIncludedRecipient("Name\n \t<EXTRA@example.com>"), {
+    email: "extra@example.com",
+    name: "Name",
+  });
+  assert.deepEqual(parseIncludedRecipient("A <B> <EXTRA@example.com>"), {
+    email: "extra@example.com",
+    name: "A  B",
+  });
+  for (const token of ["Name\nPerson <extra@example.com>", "Name <a>b@example.com>", "Name <>", "Name\u0085Person <extra@example.com>"])
+    assert.equal(parseIncludedRecipient(token), null);
+});
+
 test("too long email addresses are rejected instead of truncated", () => {
   const tooLongEmail = `${"a".repeat(250)}@e.se`;
   assert.throws(
